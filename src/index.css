@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@theme {
+  /* du brand palette */
+  --color-du-purple-950: #0f0033;
+  --color-du-purple-900: #1c0057;
+  --color-du-purple-800: #2d0066;
+  --color-du-purple-700: #3d007a;
+  --color-du-purple-600: #5c0099;
+  --color-du-purple-500: #7a00b8;
+  --color-du-purple-400: #9b4dcc;
+  --color-du-purple-300: #c299e0;
+  --color-du-purple-200: #e0ccf0;
+  --color-du-purple-100: #f0e6f8;
+  --color-du-purple-50: #f8f4fc;
+
+  --color-du-magenta-700: #a8005c;
+  --color-du-magenta-600: #c8006e;
+  --color-du-magenta-500: #e6007e;
+  --color-du-magenta-400: #f0339a;
+  --color-du-magenta-300: #f566b4;
+  --color-du-magenta-200: #fab8d9;
+  --color-du-magenta-100: #fde6f2;
+  --color-du-magenta-50: #fef4f9;
+
+  --color-du-cyan-700: #006970;
+  --color-du-cyan-600: #00838f;
+  --color-du-cyan-500: #00a3a1;
+  --color-du-cyan-400: #26b5b3;
+  --color-du-cyan-100: #d4f4f3;
+  --color-du-cyan-50: #edfafa;
+
+  /* UI neutrals — readable greys with a slight purple tint (NOT light lavender) */
+  --color-navy-50: #f7f6f9;
+  --color-navy-100: #eceaf0;
+  --color-navy-200: #d5d1dc;
+  --color-navy-300: #b3adbb;
+  --color-navy-400: #6e6878;
+  --color-navy-500: #524d5c;
+  --color-navy-600: #3f3a48;
+  --color-navy-700: #2e2a36;
+  --color-navy-800: #1f1c26;
+  --color-navy-900: #1c0057;
+  --color-navy-950: #0f0033;
+
+  --color-gold-50: #fef4f9;
+  --color-gold-100: #fde6f2;
+  --color-gold-200: #fab8d9;
+  --color-gold-300: #f566b4;
+  --color-gold-400: #f0339a;
+  --color-gold-500: #e6007e;
+  --color-gold-600: #c8006e;
+
+  --color-teal-50: #edfafa;
+  --color-teal-100: #d4f4f3;
+  --color-teal-200: #a8e8e6;
+  --color-teal-500: #00a3a1;
+  --color-teal-600: #00838f;
+  --color-teal-700: #006970;
+
+  --color-surface: #f3f2f6;
+  --color-surface-elevated: #ffffff;
+  --color-border-muted: #d5d1dc;
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border-muted;
+  }
+
+  body {
+    @apply bg-surface text-du-purple-900 antialiased;
+    font-family: var(--font-sans);
+    margin: 0;
+    background-color: #f3f2f6;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #b3adbb transparent;
+  }
+
+  .page-container {
+    @apply w-full min-w-0;
+  }
+
+  .du-gradient {
+    background: linear-gradient(135deg, #1c0057 0%, #5c0099 45%, #e6007e 100%);
+  }
+
+  .du-gradient-soft {
+    background: linear-gradient(135deg, #f8f4fc 0%, #fde6f2 100%);
+  }
+
+  .du-gradient-text {
+    background: linear-gradient(135deg, #1c0057 0%, #e6007e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .du-card-shadow {
+    box-shadow:
+      0 1px 2px rgba(28, 0, 87, 0.06),
+      0 2px 8px rgba(28, 0, 87, 0.08);
+  }
+
+  .du-card-shadow-lg {
+    box-shadow:
+      0 4px 12px rgba(28, 0, 87, 0.1),
+      0 8px 24px rgba(28, 0, 87, 0.08);
+  }
+
+  .du-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* Readable text hierarchy */
+  .text-secondary {
+    @apply text-navy-600;
+  }
+
+  .text-muted {
+    @apply text-navy-500;
+  }
+}
