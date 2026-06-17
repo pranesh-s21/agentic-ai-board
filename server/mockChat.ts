@@ -14,6 +14,7 @@ export function chatWithMock(message: string): ChatServiceResponse {
   return {
     answer: response.answer,
     citationIds: response.citationIds,
+    citations: 'citations' in response ? response.citations : undefined,
     confidence: response.confidence,
     priorDecisions: response.priorDecisions,
     conditions: response.conditions,

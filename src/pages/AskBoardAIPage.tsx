@@ -27,9 +27,10 @@ export function AskBoardAIPage() {
 
   const [input, setInput] = useState('')
   const isDisabled = aiFreeMode && chatScope === 'Current agenda item'
+  const isQuerying = chatMessages.some((m) => m.loading)
 
   const handleSend = () => {
-    if (!input.trim() || isDisabled) return
+    if (!input.trim() || isDisabled || isQuerying) return
     sendChatMessage(input.trim(), chatScope)
     setInput('')
   }
@@ -68,46 +69,40 @@ export function AskBoardAIPage() {
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {defaultChatPrompts.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => !isDisabled && sendChatMessage(prompt, chatScope)}
-            disabled={isDisabled}
-            className="rounded-full border border-navy-200 bg-white px-3 py-1.5 text-xs text-navy-600 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50 disabled:opacity-50"
-          >
-            {prompt}
-          </button>
-        ))}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-navy-200/80 bg-white shadow-sm">
+        <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">
+          <BoardChatMessages
+            messages={chatMessages}
+            suggestedPrompts={defaultChatPrompts}
+            onPromptClick={(prompt) => sendChatMessage(prompt, chatScope)}
+            promptsDisabled={isDisabled || isQuerying}
+            onSaveAnswer={saveAIAnswer}
+            onCitationClick={(id) => navigateToCitation(id)}
+            onSendToSecretariat={() => showToast('Sent to Secretariat')}
+            onOpenDecision={() => {
+              setSelectedDecisionId('decision-2')
+              setScreen('decision_memory')
+            }}
+          />
+        </div>
+
+        <div className="border-t border-navy-100 p-4">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder={isDisabled ? 'AI queries disabled for this agenda item' : isQuerying ? 'Briefing note in preparation…' : 'Ask about prior decisions, conditions, or risks...'}
+              disabled={isDisabled || isQuerying}
+              className="flex-1 shadow-sm"
+            />
+            <Button onClick={handleSend} disabled={isDisabled || isQuerying || !input.trim()} className="shadow-sm">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-xl border border-navy-200/80 bg-white p-5 shadow-sm scrollbar-thin">
-        <BoardChatMessages
-          messages={chatMessages}
-          onSaveAnswer={saveAIAnswer}
-          onCitationClick={(id) => navigateToCitation(id)}
-          onSendToSecretariat={() => showToast('Sent to Secretariat')}
-          onOpenDecision={() => {
-            setSelectedDecisionId('decision-2')
-            setScreen('decision_memory')
-          }}
-        />
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder={isDisabled ? 'AI queries disabled for this agenda item' : 'Ask about prior decisions, conditions, or risks...'}
-          disabled={isDisabled}
-          className="flex-1 shadow-sm"
-        />
-        <Button onClick={handleSend} disabled={isDisabled || !input.trim()} className="shadow-sm">
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
     </div>
   )
 }

@@ -21,43 +21,41 @@ npm run dev          # frontend on :5173
 
 ## Cohere North integration (POC)
 
-Board AI chat calls a small Express proxy (`server/`) so API keys stay off the frontend.
+Board AI chat calls a small Express proxy (`server/`) so credentials stay off the frontend.
 
-### Option A — Cohere North agent (recommended)
+### How North My Files actually work
 
-Configure the agent you built in North Agent Studio:
+| What you're using | Can see North My Files? |
+|---|---|
+| **North agent** (`CHAT_PROVIDER=north`) | Yes — same as democloud chat UI |
+| **Public Cohere API** (`CHAT_PROVIDER=cohere`) | No — only mock board pack documents |
+
+Your dashboard `COHERE_API_KEY` talks to `api.cohere.com`. It cannot see files in North My Files. Those are accessed by your **North agent** on democloud — the Board app must call that agent.
+
+### Connect live North My Files (no local copy)
+
+1. **North Admin → Agents** — copy your agent ID
+2. Open **democloud.cohere.com**, log in, open your agent chat
+3. **DevTools → Network** — send a message, find the POST request
+4. Copy the **Cookie** header → `NORTH_SESSION_COOKIE`
+5. Optionally copy the full POST URL → `NORTH_CHAT_URL`
 
 ```env
 CHAT_PROVIDER=north
-COHERE_API_KEY=your-key
-NORTH_CHAT_URL=https://your-north-instance.example.com/api/v1/agents/YOUR_AGENT_ID/chat
-```
-
-Or use base URL + agent ID:
-
-```env
-NORTH_BASE_URL=https://your-north-instance.example.com
+NORTH_BASE_URL=https://democloud.cohere.com
 NORTH_AGENT_ID=your-agent-id
+NORTH_SESSION_COOKIE=session=...; ...
 ```
 
-### Option B — Cohere Chat API with board pack RAG
+Restart `npm run dev:all`, then test: `GET http://localhost:3001/api/north/discover`
 
-Uses Cohere Chat v2 with board pack documents as RAG context (good fallback if North URL isn't ready):
+If OAuth app registration is blocked on your instance, the **session cookie** is the practical auth path until your admin creates an OAuth app.
 
-```env
-CHAT_PROVIDER=cohere
-COHERE_API_KEY=your-key
-COHERE_MODEL=command-a-03-2025
-```
+### Verify
 
-### Option C — Mock (no keys)
-
-If no keys are set, the server returns hardcoded demo answers so the UI still works.
-
-### Verify connection
-
-- Open **Ask Board AI** — status badge shows `Cohere North`, `Cohere Agent`, or `Mock (offline)`
-- Or hit `GET http://localhost:3001/api/chat/health`
+- **Ask Board AI** badge shows **Cohere North** (not "Cohere Agent")
+- 5G questions match what you get in the North UI
+- `GET http://localhost:3001/api/chat/health` → `"provider": "north"`
 
 ## Role switching
 
@@ -78,4 +76,86 @@ Use the role selector in the header to simulate:
 6. Switch to **Chair** and enable **AI-Free Mode** in Chair Controls
 7. Switch to **Secretariat** to approve pending AI drafts
 
-Board pack data is hardcoded; chat uses Cohere North / Cohere API when configured.
+Board pack data is hardcoded; chat uses your North agent when configured.
+
+## Governance Actions (PostgreSQL + MCP)
+
+Action Tracking can use a **live governance register** in PostgreSQL instead of mock data.
+
+### 1. Start Postgres
+
+**Local (Docker):**
+
+```bash
+# Start Docker Desktop first, then:
+npm run db:up
+npm run db:migrate
+```
+
+Use `npm run db:up` (not bare `docker compose up`) so Compose does not read your main `.env` — `NORTH_SESSION_COOKIE` contains `$o1`, `$g0`, etc. from Google Analytics cookies, which Docker mis-parses as variables.
+
+**Supabase:** create a project, copy the connection string into `.env`:
+
+```env
+DATABASE_URL=postgresql://postgres.[ref]:[password]@...pooler.supabase.com:6543/postgres
+DATABASE_SSL=true
+```
+
+### 2. Run the stack
+
+```bash
+npm run dev:stack
+```
+
+This starts Vite (`5173`), chat API (`3001`), and the **governance MCP server** (`3002`).
+
+Action Tracking shows **“Live governance register”** when the DB is connected.
+
+### 3. Expose MCP to Cohere North (ngrok)
+
+North on democloud cannot reach `localhost`. Tunnel the MCP port:
+
+```bash
+ngrok http 3002
+```
+
+Add to `.env` (hostname only, no `https://`):
+
+```env
+MCP_ALLOWED_HOSTS=your-subdomain.ngrok-free.app
+```
+
+In **North Admin → your agent → Tools / MCP**, add a remote MCP connector:
+
+- **URL:** `https://your-subdomain.ngrok-free.app/mcp`
+- **Transport:** Streamable HTTP
+
+Restart MCP after changing `MCP_ALLOWED_HOSTS`:
+
+```bash
+npm run dev:mcp
+```
+
+### MCP tools (for North)
+
+| Tool | Purpose |
+|------|---------|
+| `list_governance_actions` | List actions (filter by status, owner, document ref) |
+| `get_governance_action` | Get one action by UUID |
+| `create_governance_action` | Create action (title, owner, due date, notes, document ref, …) |
+| `update_governance_action` | Update status or fields |
+
+### REST API (Board app)
+
+| Method | Path |
+|--------|------|
+| `GET` | `/api/governance/health` |
+| `GET` | `/api/governance/actions` |
+| `POST` | `/api/governance/actions` |
+| `PATCH` | `/api/governance/actions/:id` |
+
+### Action fields
+
+- `title`, `description`, `owner`, `dueDate`, `notes`
+- `documentReferenceId` — North My Files ID or board document reference
+- `status`, `priority`, `linkedDecision`

@@ -46,7 +46,7 @@ export async function chatWithCohere(
   const body: Record<string, unknown> = {
     model,
     messages,
-    documents: buildCohereDocuments(),
+    documents: await buildCohereDocuments(),
     temperature: 0.3,
   }
 
@@ -92,12 +92,18 @@ export async function chatWithCohere(
 
   const data = (await response.json()) as CohereChatResponse
   const answer = extractAssistantText(data.message?.content)
-  const citationIds = mapCohereCitationsToIds(data.message?.citations ?? [])
+  const { citationIds, citations } = await mapCohereCitationsToIds(data.message?.citations ?? [])
+  const northCited = citations.some((c) => c.source === 'north-file')
 
   return {
     answer: answer || 'No response generated.',
     citationIds,
-    confidence: citationIds.length > 0 ? `High — ${citationIds.length} source(s) cited` : 'Medium — Board pack context',
+    citations,
+    confidence: citationIds.length > 0
+      ? northCited
+        ? `High — ${citationIds.length} source(s) · North My Files`
+        : `High — ${citationIds.length} source(s) cited`
+      : 'Medium — document context',
     provider: 'cohere',
     toolPlan: data.message?.tool_plan,
   }

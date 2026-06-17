@@ -4,12 +4,18 @@ import type { ChatMessage } from '@/types'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { CitationList } from '@/components/shared/CitationChip'
+import { answerReferencesGovernanceRegister } from '@/lib/governanceCitation'
+import { AgentQueryProgress } from '@/components/shared/AgentQueryProgress'
+import { ChatMessageBody } from '@/components/shared/ChatMessageBody'
 import { providerLabel } from '@/lib/chatApi'
-import { Bot, Bookmark, Loader2, Shield, User } from 'lucide-react'
+import { Bot, Bookmark, Shield, User } from 'lucide-react'
 
 interface BoardChatMessagesProps {
   messages: ChatMessage[]
   compact?: boolean
+  suggestedPrompts?: string[]
+  onPromptClick?: (prompt: string) => void
+  promptsDisabled?: boolean
   onSaveAnswer?: (question: string, answer: string, citationIds: string[]) => void
   onOpenDecision?: () => void
   onSendToSecretariat?: () => void
@@ -20,6 +26,9 @@ interface BoardChatMessagesProps {
 export function BoardChatMessages({
   messages,
   compact = false,
+  suggestedPrompts,
+  onPromptClick,
+  promptsDisabled = false,
   onSaveAnswer,
   onOpenDecision,
   onSendToSecretariat,
@@ -37,13 +46,32 @@ export function BoardChatMessages({
   if (messages.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-du-purple-900 shadow-md">
-          <Bot className="h-6 w-6 text-white" />
+        <div className={`mb-3 flex items-center justify-center rounded-full bg-du-purple-900 shadow-md ${compact ? 'h-10 w-10' : 'h-12 w-12'}`}>
+          <Bot className={compact ? 'h-5 w-5 text-white' : 'h-6 w-6 text-white'} />
         </div>
-        <p className="text-sm font-medium text-navy-800">Board AI Assistant</p>
-        <p className="mt-1 max-w-[240px] text-xs leading-relaxed text-navy-500">
+        <p className={`font-medium text-navy-800 ${compact ? 'text-xs' : 'text-sm'}`}>Board AI Assistant</p>
+        <p className={`mt-1 leading-relaxed text-navy-500 ${compact ? 'max-w-[220px] text-[11px]' : 'max-w-md text-xs'}`}>
           Ask about this agenda item, prior decisions, or risks. Responses are source-cited.
         </p>
+        {suggestedPrompts && suggestedPrompts.length > 0 && onPromptClick && (
+          <div className={`mt-4 flex flex-wrap justify-center gap-2 ${compact ? 'max-w-full' : 'max-w-lg'}`}>
+            {suggestedPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                disabled={promptsDisabled}
+                onClick={() => onPromptClick(prompt)}
+                className={
+                  compact
+                    ? 'rounded-full border border-du-purple-200 bg-white px-2 py-0.5 text-[10px] text-du-purple-700 transition-colors hover:border-du-magenta-300 hover:bg-du-magenta-50 disabled:opacity-40'
+                    : 'rounded-full border border-navy-200 bg-white px-3 py-1.5 text-xs text-navy-600 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50 disabled:opacity-50'
+                }
+              >
+                {compact && prompt.length > 42 ? `${prompt.slice(0, 42)}…` : prompt}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -59,10 +87,7 @@ export function BoardChatMessages({
           )}
           <div className={`max-w-[88%] ${msg.role === 'user' ? 'order-first' : ''}`}>
             {msg.loading ? (
-              <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-navy-100 bg-white px-3 py-2.5 shadow-sm">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
-                <span className="text-xs text-navy-500">Querying agent…</span>
-              </div>
+              <AgentQueryProgress compact={compact} />
             ) : msg.role === 'user' ? (
               <div className="rounded-2xl rounded-tr-sm bg-du-purple-900 px-3 py-2 text-sm text-white shadow-sm">
                 {msg.content}
@@ -81,7 +106,7 @@ export function BoardChatMessages({
                 {msg.toolPlan && (
                   <p className="mb-2 text-[10px] italic text-navy-500 line-clamp-2">{msg.toolPlan}</p>
                 )}
-                <p className={`leading-relaxed text-navy-800 ${compact ? 'text-xs' : 'text-sm'}`}>{msg.content}</p>
+                <ChatMessageBody content={msg.content} compact={compact} />
                 {msg.priorDecisions && msg.priorDecisions.length > 0 && (
                   <div className="mt-2">
                     <p className="text-[10px] font-semibold uppercase text-navy-400">Prior Decisions</p>
@@ -104,8 +129,17 @@ export function BoardChatMessages({
                 )}
                 {msg.citationIds && msg.citationIds.length > 0 && (
                   <div className="mt-2">
-                    <p className="mb-1 text-[10px] font-semibold uppercase text-navy-400">Sources — click to view in document</p>
-                    <CitationList citationIds={msg.citationIds} onCitationClick={handleCitationClick} />
+                    <p className="mb-1 text-[10px] font-semibold uppercase text-navy-400">
+                      {answerReferencesGovernanceRegister(msg.content)
+                        ? 'Sources — click to open register'
+                        : 'Sources — click to open document'}
+                    </p>
+                    <CitationList
+                      citationIds={msg.citationIds}
+                      citations={msg.citations}
+                      answerContent={msg.content}
+                      onCitationClick={handleCitationClick}
+                    />
                   </div>
                 )}
                 {showActions && !compact && (

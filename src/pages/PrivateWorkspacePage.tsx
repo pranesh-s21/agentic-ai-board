@@ -122,7 +122,8 @@ export function PrivateWorkspacePage() {
             <Badge variant="muted">Not part of the official Board record</Badge>
           </div>
           <p className="mt-2 text-sm text-navy-600">
-            Organise meeting preparation in private workspaces — folders, notes, board pack references, and uploaded files.
+            Organise meeting preparation in private workspaces — folders, notes, and board pack references.
+            Organisation-wide documents live in <strong className="font-semibold text-navy-800">Files</strong> in the sidebar.
           </p>
         </div>
       </div>
@@ -306,7 +307,7 @@ export function PrivateWorkspacePage() {
             />
           </div>
           <p className="text-xs text-navy-500">
-            Default folders will be created: Preparation Notes, Reference Documents, Uploaded Files, and Saved from Board.
+            Default folders will be created: Preparation Notes, Reference Documents, and Saved from Board.
           </p>
           <Button className="w-full" onClick={handleCreateWorkspace} disabled={!workspaceName.trim()}>
             Create workspace

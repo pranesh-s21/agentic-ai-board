@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Calendar,
   FolderOpen,
+  Files,
   MessageSquare,
   Lock,
   History,
@@ -19,6 +20,7 @@ const mainNav: { screen: Screen; icon: typeof LayoutDashboard }[] = [
   { screen: 'dashboard', icon: LayoutDashboard },
   { screen: 'meetings', icon: Calendar },
   { screen: 'board_pack', icon: FolderOpen },
+  { screen: 'files', icon: Files },
   { screen: 'ask_ai', icon: MessageSquare },
   { screen: 'private_workspace', icon: Lock },
 ]
@@ -40,12 +42,14 @@ function NavSection({
   screen,
   setScreen,
   canAccess,
+  badges,
 }: {
   label: string
   items: { screen: Screen; icon: typeof LayoutDashboard; restricted?: string }[]
   screen: Screen
   setScreen: (s: Screen) => void
   canAccess: (f: string) => boolean
+  badges?: Partial<Record<Screen, number>>
 }) {
   return (
     <div className="mb-5">
@@ -72,6 +76,11 @@ function NavSection({
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{SCREEN_LABELS[navScreen]}</span>
+                {badges?.[navScreen] != null && (
+                  <span className="ml-auto rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                    {badges[navScreen]}
+                  </span>
+                )}
                 {isRestricted && (
                   <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-navy-300">Locked</span>
                 )}
@@ -85,7 +94,8 @@ function NavSection({
 }
 
 export function Sidebar() {
-  const { screen, setScreen, canAccess } = useApp()
+  const { screen, setScreen, canAccess, chatHealth } = useApp()
+  const orgFileCount = chatHealth.northFiles?.fileCount ?? 0
 
   return (
     <aside className="flex w-[17.5rem] shrink-0 flex-col border-r border-navy-200 bg-white">
@@ -93,7 +103,14 @@ export function Sidebar() {
         <DuLogo size="md" />
       </div>
       <nav className="flex-1 overflow-y-auto p-3 scrollbar-thin">
-        <NavSection label="Workspace" items={mainNav} screen={screen} setScreen={setScreen} canAccess={canAccess} />
+        <NavSection
+          label="Workspace"
+          items={mainNav}
+          screen={screen}
+          setScreen={setScreen}
+          canAccess={canAccess}
+          badges={{ files: orgFileCount > 0 ? orgFileCount : undefined }}
+        />
         <NavSection label="Records" items={recordsNav} screen={screen} setScreen={setScreen} canAccess={canAccess} />
         <NavSection label="Governance" items={adminNav} screen={screen} setScreen={setScreen} canAccess={canAccess} />
       </nav>

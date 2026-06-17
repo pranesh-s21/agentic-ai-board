@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { MeetingsPage } from '@/pages/MeetingsPage'
 import { BoardPackReviewPage } from '@/pages/BoardPackReviewPage'
+import { FilesPage } from '@/pages/FilesPage'
 import { AskBoardAIPage } from '@/pages/AskBoardAIPage'
 import { PrivateWorkspacePage } from '@/pages/PrivateWorkspacePage'
 import { DecisionMemoryPage } from '@/pages/DecisionMemoryPage'
@@ -11,8 +12,11 @@ import { ActionTrackingPage } from '@/pages/ActionTrackingPage'
 import { SecretariatReviewPage } from '@/pages/SecretariatReviewPage'
 import { ChairControlsPage } from '@/pages/ChairControlsPage'
 import { GovernancePage } from '@/pages/GovernancePage'
+import { NorthDocumentViewer } from '@/components/shared/NorthDocumentViewer'
+import { Drawer } from '@/components/ui/Drawer'
 import type { Screen } from '@/types'
 import { CheckCircle2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 function ScreenRouter() {
   const { screen } = useApp()
@@ -21,6 +25,7 @@ function ScreenRouter() {
     dashboard: <DashboardPage />,
     meetings: <MeetingsPage />,
     board_pack: <BoardPackReviewPage />,
+    files: <FilesPage />,
     ask_ai: <AskBoardAIPage />,
     private_workspace: <PrivateWorkspacePage />,
     decision_memory: <DecisionMemoryPage />,
@@ -47,17 +52,41 @@ function Toast() {
   )
 }
 
+function NorthDocumentDrawer() {
+  const { northDocumentView, setNorthDocumentView } = useApp()
+  return (
+    <Drawer
+      open={!!northDocumentView}
+      onClose={() => setNorthDocumentView(null)}
+      title="North document"
+      className="!max-w-4xl"
+    >
+      {northDocumentView && (
+        <NorthDocumentViewer view={northDocumentView} />
+      )}
+    </Drawer>
+  )
+}
+
 function AppLayout() {
+  const { screen } = useApp()
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6 scrollbar-thin">
+        <main
+          className={cn(
+            'flex-1 p-5 lg:p-6 scrollbar-thin',
+            screen === 'files' ? 'overflow-hidden' : 'overflow-y-auto'
+          )}
+        >
           <ScreenRouter />
         </main>
       </div>
       <Toast />
+      <NorthDocumentDrawer />
     </div>
   )
 }

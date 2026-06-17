@@ -4,6 +4,7 @@ export type Screen =
   | 'dashboard'
   | 'meetings'
   | 'board_pack'
+  | 'files'
   | 'ask_ai'
   | 'private_workspace'
   | 'decision_memory'
@@ -117,6 +118,8 @@ export interface ActionItem {
   linkedDecision: string
   priority: 'High' | 'Medium' | 'Low'
   description: string
+  documentReferenceId?: string | null
+  notes?: string
   linkedMeetingId?: string
 }
 
@@ -166,6 +169,45 @@ export interface ChatHealth {
   configured: boolean
   model?: string
   northAgentId?: string | null
+  northFiles?: {
+    configured: boolean
+    fileCount: number
+    chunkCount: number
+    directory: string
+    ragSource: string
+  }
+}
+
+export interface ResolvedChatCitation {
+  id: string
+  documentTitle: string
+  page: number
+  passage: string
+  /** Short phrase from the AI answer that points at this source */
+  highlight?: string
+  /** Full retrieved chunk — used for rich preview */
+  fullPassage?: string
+  /** North My Files document id (for full-document viewer) */
+  northFileId?: string
+  confidence: ConfidenceLevel
+  source?: 'mock' | 'north-file' | 'north-agent' | 'governance-register'
+  documentId?: string
+}
+
+export interface NorthDocumentView {
+  fileId?: string
+  title: string
+  page: number
+  highlight?: string
+}
+
+export interface NorthMyFile {
+  id: string
+  filename: string
+  bytes: number
+  createdAt: string
+  status: string
+  statusDetails: string | null
 }
 
 export interface ChatMessage {
@@ -177,6 +219,7 @@ export interface ChatMessage {
   priorDecisions?: string[]
   conditions?: string[]
   citationIds?: string[]
+  citations?: ResolvedChatCitation[]
   confidence?: string
   loading?: boolean
   provider?: 'cohere' | 'north' | 'mock'
@@ -256,6 +299,7 @@ export const SCREEN_LABELS: Record<Screen, string> = {
   dashboard: 'Dashboard',
   meetings: 'Meetings',
   board_pack: 'Board Packs',
+  files: 'Files',
   ask_ai: 'Ask Board AI',
   private_workspace: 'Private Workspace',
   decision_memory: 'Decision Memory',

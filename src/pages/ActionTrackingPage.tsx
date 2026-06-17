@@ -19,7 +19,17 @@ const statusVariant = (status: ActionStatus) => {
 }
 
 export function ActionTrackingPage() {
-  const { actionItems, selectedActionId, setSelectedActionId, updateActionStatus, canAccess, role } = useApp()
+  const {
+    actionItems,
+    actionsSource,
+    governanceHealth,
+    refreshActions,
+    selectedActionId,
+    setSelectedActionId,
+    updateActionStatus,
+    canAccess,
+    role,
+  } = useApp()
 
   const open = actionItems.filter((a) => a.status === 'Open').length
   const overdue = actionItems.filter((a) => a.status === 'Overdue').length
@@ -31,6 +41,19 @@ export function ActionTrackingPage() {
 
   return (
     <div className="space-y-6">
+      {actionsSource === 'database' ? (
+        <div className="rounded-md border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">
+          Live governance register · {governanceHealth?.actionCount ?? actionItems.length} action(s) in PostgreSQL
+        </div>
+      ) : (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Showing mock actions — start Postgres (<code className="text-xs">docker compose up -d</code>) and restart the server.
+          <Button variant="ghost" size="sm" className="ml-2 h-7" onClick={refreshActions}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {!canEdit && role === 'board_member' && (
         <div className="rounded-md border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-600">
           Read-only view. Action status changes require Secretariat role.
@@ -53,6 +76,7 @@ export function ActionTrackingPage() {
               <th className="px-4 py-3 font-medium text-navy-700">Due Date</th>
               <th className="px-4 py-3 font-medium text-navy-700">Priority</th>
               <th className="px-4 py-3 font-medium text-navy-700">Linked Decision</th>
+              <th className="hidden px-4 py-3 font-medium text-navy-700 lg:table-cell">Document Ref</th>
               <th className="px-4 py-3 font-medium text-navy-700">Status</th>
               <th className="px-4 py-3 font-medium text-navy-700"></th>
             </tr>
@@ -69,6 +93,9 @@ export function ActionTrackingPage() {
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-navy-600 max-w-[180px] truncate">{action.linkedDecision}</td>
+                <td className="hidden px-4 py-3 text-navy-500 lg:table-cell max-w-[140px] truncate">
+                  {action.documentReferenceId ?? '—'}
+                </td>
                 <td className="px-4 py-3">
                   <Badge variant={statusVariant(action.status)}>{action.status}</Badge>
                 </td>
@@ -111,6 +138,18 @@ export function ActionTrackingPage() {
                 <p className="text-xs font-medium uppercase text-navy-400">Linked Decision</p>
                 <p className="text-sm text-navy-800">{selected.linkedDecision}</p>
               </div>
+              {selected.documentReferenceId && (
+                <div className="col-span-2">
+                  <p className="text-xs font-medium uppercase text-navy-400">Document Reference</p>
+                  <p className="text-sm font-mono text-navy-800">{selected.documentReferenceId}</p>
+                </div>
+              )}
+              {selected.notes && (
+                <div className="col-span-2">
+                  <p className="text-xs font-medium uppercase text-navy-400">Notes</p>
+                  <p className="text-sm text-navy-800">{selected.notes}</p>
+                </div>
+              )}
             </div>
             {canEdit && (
               <div>

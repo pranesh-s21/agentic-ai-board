@@ -1,0 +1,2 @@
+# Place exported North My Files here (.txt, .md, .json, .csv).
+# The chat server indexes this folder for RAG when NORTH_RAG_SOURCE includes north-files.

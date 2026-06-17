@@ -1,6 +1,5 @@
 import { useApp } from '@/context/AppContext'
 import { ROLE_LABELS, SCREEN_LABELS, type UserRole } from '@/types'
-import { DuLogo } from '@/components/brand/DuLogo'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Input'
 import { Bell, ShieldCheck, User } from 'lucide-react'
@@ -12,12 +11,7 @@ export function Header() {
 
   return (
     <header className="flex h-[4.5rem] shrink-0 items-center justify-between border-b border-du-purple-100 bg-white px-6 shadow-sm">
-      <div className="flex items-center gap-5">
-        <div className="hidden lg:block">
-          <DuLogo size="sm" />
-        </div>
-        <div className="h-8 w-px bg-du-purple-100 hidden lg:block" />
-        <div>
+      <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-du-purple-900">
             {SCREEN_LABELS[screen]}
           </h1>
@@ -25,7 +19,6 @@ export function Header() {
             {meeting.title} · {formatDate(meeting.date)}
           </p>
         </div>
-      </div>
       <div className="flex items-center gap-3">
         {aiFreeMode && (
           <Badge variant="restricted" className="hidden sm:inline-flex">

@@ -137,7 +137,6 @@ export const initialPrivateWorkspaces: PrivateWorkspace[] = [
 export const initialWorkspaceFolders: WorkspaceFolder[] = [
   { id: 'folder-notes', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Preparation Notes', createdAt: '2026-06-01T09:00:00' },
   { id: 'folder-docs', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Reference Documents', createdAt: '2026-06-01T09:00:00' },
-  { id: 'folder-files', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Uploaded Files', createdAt: '2026-06-01T09:00:00' },
   { id: 'folder-saved', workspaceId: DEFAULT_WORKSPACE_ID, name: 'Saved from Board', createdAt: '2026-06-01T09:00:00' },
 ]
 
@@ -585,10 +584,10 @@ export const chatResponses: Record<string, {
 
 export const defaultChatPrompts = [
   'What is the scope of the Strategic Network Investment Programme?',
+  'What are the open actions from the register?',
   'Have we approved a similar programme before?',
   'What conditions were attached to previous approvals?',
   'What risks should directors focus on?',
-  'Draft a condition requiring quarterly risk reporting.',
 ]
 
 export function findChatResponse(content: string) {
@@ -606,6 +605,29 @@ export function findChatResponse(content: string) {
   }
   if (lower.includes('risk') && (lower.includes('director') || lower.includes('focus'))) {
     return chatResponses['What risks should directors focus on?']
+  }
+  if (
+    (lower.includes('action') || lower.includes('register')) &&
+    (lower.includes('governance') || lower.includes('open') || lower.includes('register'))
+  ) {
+    return {
+      answer:
+        'There are 3 governance actions in the register:\n\n1. **Updated financial model before next meeting**\n- Status: Overdue\n- Owner: Chief Financial Officer\n- Due: 10 June 2026\n- Priority: High\n\n2. **Final vendor due diligence**\n- Status: Open\n- Owner: Procurement and Technology\n- Due: 30 July 2026\n- Priority: High\n\n3. **Quarterly risk reporting**\n- Status: Open\n- Owner: Chief Risk Officer\n- Due: 30 September 2026\n- Priority: High',
+      priorDecisions: [],
+      conditions: [],
+      citationIds: ['cite-governance-register'],
+      citations: [
+        {
+          id: 'cite-governance-register',
+          documentTitle: 'Actions register',
+          page: 1,
+          passage: '3 governance actions from the board register.',
+          confidence: 'High' as const,
+          source: 'governance-register' as const,
+        },
+      ],
+      confidence: 'High — Actions register (mock)',
+    }
   }
 
   return null
@@ -806,6 +828,16 @@ export function getVersionById(id: string): DocumentVersion | undefined {
 }
 
 export function getCitationById(id: string): Citation | undefined {
+  if (id === 'cite-governance-register') {
+    return {
+      id: 'cite-governance-register',
+      documentId: '',
+      documentTitle: 'Actions register',
+      page: 1,
+      passage: 'Board governance actions from the live register.',
+      confidence: 'High',
+    }
+  }
   return citations.find((c) => c.id === id)
 }
 

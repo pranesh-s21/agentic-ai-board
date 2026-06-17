@@ -1,10 +1,11 @@
-import type { ChatHealth, ChatProvider } from '@/types'
+import type { ChatHealth, ChatProvider, ResolvedChatCitation } from '@/types'
 
 const API_BASE = '/api/chat'
 
 export interface ChatApiResponse {
   answer: string
   citationIds: string[]
+  citations?: ResolvedChatCitation[]
   confidence: string
   provider: ChatProvider
   toolPlan?: string
@@ -22,6 +23,7 @@ export async function fetchChatHealth(): Promise<ChatHealth> {
       configured: !!data.configured,
       model: data.model,
       northAgentId: data.northAgentId,
+      northFiles: data.northFiles,
     }
   } catch {
     return { provider: 'unknown', configured: false }
@@ -39,15 +41,27 @@ export async function sendChatToAgent(params: {
     body: JSON.stringify(params),
   })
 
+  const data = await res.json().catch(() => ({}))
+
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Chat request failed (${res.status})`)
+    const message =
+      typeof data.error === 'string'
+        ? data.error
+        : typeof data.hint === 'string'
+          ? `${data.error ?? 'Chat failed'}\n\n${data.hint}`
+          : `Chat request failed (${res.status})`
+    throw new Error(message)
   }
 
-  return res.json()
+  return data as ChatApiResponse
 }
 
-export function providerLabel(provider: ChatProvider): string {
+export function providerLabel(provider: ChatProvider, northFiles?: ChatHealth['northFiles']): string {
+  if (northFiles?.configured && northFiles.fileCount > 0) {
+    if (provider === 'north') return `North Agent · ${northFiles.fileCount} files`
+    if (provider === 'cohere') return `Cohere + North Files (${northFiles.fileCount})`
+  }
+
   switch (provider) {
     case 'north':
       return 'Cohere North'

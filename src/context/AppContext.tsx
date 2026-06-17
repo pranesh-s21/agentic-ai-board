@@ -20,7 +20,11 @@ import type {
   DraftQuestion,
   ReviewStatus,
   ActionStatus,
+  ResolvedChatCitation,
+  Citation,
+  NorthDocumentView,
 } from '@/types'
+import { scoreNorthChunk } from '@/lib/northExcerpt'
 import {
   meeting,
   secretariatReviewItems as initialReviewItems,
@@ -35,6 +39,17 @@ import {
   getDocumentById,
 } from '@/data/mockData'
 import { fetchChatHealth, sendChatToAgent } from '@/lib/chatApi'
+import {
+  applyGovernanceRegisterCitation,
+  answerReferencesGovernanceRegister,
+  shouldUseGovernanceRegisterCitation,
+} from '@/lib/governanceCitation'
+import {
+  fetchGovernanceActions,
+  fetchGovernanceHealth,
+  updateGovernanceActionStatus,
+  type GovernanceHealth,
+} from '@/lib/actionsApi'
 
 interface AppContextValue {
   role: UserRole
@@ -90,6 +105,9 @@ interface AppContextValue {
   reviewItems: typeof initialReviewItems
   updateReviewStatus: (id: string, status: ReviewStatus) => void
   actionItems: typeof initialActions
+  actionsSource: 'database' | 'mock'
+  governanceHealth: GovernanceHealth | null
+  refreshActions: () => Promise<void>
   updateActionStatus: (id: string, status: ActionStatus) => void
   showComparisonModal: boolean
   setShowComparisonModal: (show: boolean) => void
@@ -98,6 +116,11 @@ interface AppContextValue {
   navigateToBoardPack: (agendaItemId?: string) => void
   navigateToMeetings: () => void
   navigateToCitation: (citationId: string) => void
+  resolveCitation: (citationId: string) => Citation | ResolvedChatCitation | undefined
+  previewCitation: ResolvedChatCitation | null
+  setPreviewCitation: (citation: ResolvedChatCitation | null) => void
+  northDocumentView: NorthDocumentView | null
+  setNorthDocumentView: (view: NorthDocumentView | null) => void
   toast: string | null
   showToast: (message: string) => void
   canAccess: (feature: string) => boolean
@@ -123,6 +146,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [restrictedSession] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatHealth, setChatHealth] = useState<ChatHealth>({ provider: 'unknown', configured: false })
+  const [dynamicCitations, setDynamicCitations] = useState<Record<string, ResolvedChatCitation>>({})
+  const [previewCitation, setPreviewCitation] = useState<ResolvedChatCitation | null>(null)
+  const [northDocumentView, setNorthDocumentView] = useState<NorthDocumentView | null>(null)
   const [chatScope, setChatScope] = useState('Current agenda item')
   const [privateNotes, setPrivateNotes] = useState<PrivateNote[]>([
     {
@@ -148,6 +174,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ])
   const [reviewItems, setReviewItems] = useState(initialReviewItems)
   const [actionItems, setActionItems] = useState(initialActions)
+  const [actionsSource, setActionsSource] = useState<'database' | 'mock'>('mock')
+  const [governanceHealth, setGovernanceHealth] = useState<GovernanceHealth | null>(null)
   const [showComparisonModal, setShowComparisonModal] = useState(false)
   const [showReviewPreview, setShowReviewPreview] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -166,9 +194,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setChatHealth(health)
   }, [])
 
+  const refreshActions = useCallback(async () => {
+    const health = await fetchGovernanceHealth()
+    setGovernanceHealth(health)
+    if (!health.ok) {
+      setActionsSource('mock')
+      setActionItems(initialActions)
+      return
+    }
+    try {
+      const actions = await fetchGovernanceActions()
+      setActionItems(actions)
+      setActionsSource('database')
+    } catch {
+      setActionsSource('mock')
+      setActionItems(initialActions)
+    }
+  }, [])
+
   useEffect(() => {
     refreshChatHealth()
-  }, [refreshChatHealth])
+    refreshActions()
+  }, [refreshChatHealth, refreshActions])
 
   const sendChatMessage = useCallback(
     (content: string, scope: string) => {
@@ -195,27 +242,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       sendChatToAgent({ message: content, scope, history })
         .then((response) => {
+          const finalResponse = shouldUseGovernanceRegisterCitation(content, response.answer)
+            ? applyGovernanceRegisterCitation(response)
+            : response
+
           const assistantMsg: ChatMessage = {
             id: `msg-${Date.now()}-response`,
             role: 'assistant',
-            content: response.answer,
+            content: finalResponse.answer,
             timestamp: new Date().toISOString(),
             scope,
-            priorDecisions: response.priorDecisions,
-            conditions: response.conditions,
-            citationIds: response.citationIds,
-            confidence: response.confidence,
-            provider: response.provider === 'unknown' ? 'mock' : response.provider,
-            toolPlan: response.toolPlan,
+            priorDecisions: finalResponse.priorDecisions,
+            conditions: finalResponse.conditions,
+            citationIds: finalResponse.citationIds,
+            citations: finalResponse.citations,
+            confidence: finalResponse.confidence,
+            provider: finalResponse.provider === 'unknown' ? 'mock' : finalResponse.provider,
+            toolPlan: finalResponse.toolPlan,
+          }
+          if (finalResponse.citations?.length) {
+            setDynamicCitations((prev) => ({
+              ...prev,
+              ...Object.fromEntries(finalResponse.citations!.map((c) => [c.id, c])),
+            }))
           }
           setChatMessages((prev) => [...prev.filter((m) => !m.loading), assistantMsg])
         })
         .catch((error) => {
           console.error('Chat error:', error)
+          const detail = error instanceof Error ? error.message : ''
+          const isExpiredSession =
+            /expired|blacklisted|401|NORTH_SESSION_COOKIE|refresh/i.test(detail)
           const assistantMsg: ChatMessage = {
             id: `msg-${Date.now()}-error`,
             role: 'assistant',
-            content: 'Unable to reach the Board AI agent. Check that the chat server is running (`npm run dev:server`) and your Cohere North credentials are configured.',
+            content: isExpiredSession
+              ? 'North session expired. Copy a fresh `NORTH_SESSION_COOKIE` from browser DevTools while logged into North chat, update `.env`, then restart `npm run dev:stack`.'
+              : detail ||
+                'Unable to reach the Board AI agent. Check that the chat server is running (`npm run dev:server`) and your Cohere North credentials are configured.',
             timestamp: new Date().toISOString(),
             scope,
             provider: 'mock',
@@ -248,7 +312,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const defaultFolders: WorkspaceFolder[] = [
         { id: `folder-${folderBase}-notes`, workspaceId: id, name: 'Preparation Notes', createdAt: now },
         { id: `folder-${folderBase}-docs`, workspaceId: id, name: 'Reference Documents', createdAt: now },
-        { id: `folder-${folderBase}-files`, workspaceId: id, name: 'Uploaded Files', createdAt: now },
         { id: `folder-${folderBase}-saved`, workspaceId: id, name: 'Saved from Board', createdAt: now },
       ]
       setPrivateWorkspaces((prev) => [
@@ -461,11 +524,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const updateActionStatus = useCallback(
-    (id: string, status: ActionStatus) => {
+    async (id: string, status: ActionStatus) => {
+      if (actionsSource === 'database') {
+        try {
+          const updated = await updateGovernanceActionStatus(id, status)
+          setActionItems((prev) => prev.map((item) => (item.id === id ? updated : item)))
+          showToast(`Action status updated to ${status}`)
+          return
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'Could not update action')
+          return
+        }
+      }
       setActionItems((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)))
       showToast(`Action status updated to ${status}`)
     },
-    [showToast]
+    [actionsSource, showToast]
   )
 
   const navigateToBoardPack = useCallback((agendaItemId?: string) => {
@@ -473,9 +547,85 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setScreen('board_pack')
   }, [])
 
+  const resolveCitation = useCallback(
+    (citationId: string) => {
+      const mock = getCitationById(citationId)
+      if (mock) return mock
+      return dynamicCitations[citationId]
+    },
+    [dynamicCitations]
+  )
+
   const navigateToCitation = useCallback((citationId: string) => {
-    const citation = getCitationById(citationId)
+    const citation = resolveCitation(citationId)
     if (!citation) return
+
+    if (
+      citationId === 'cite-governance-register' ||
+      ('source' in citation && citation.source === 'governance-register')
+    ) {
+      setNorthDocumentView(null)
+      setScreen('action_tracking')
+      return
+    }
+
+    const isNorthSource =
+      'source' in citation &&
+      (citation.source === 'north-file' || citation.source === 'north-agent')
+
+    if (isNorthSource || !('documentId' in citation) || !citation.documentId) {
+      const base = citation as ResolvedChatCitation
+      const anchor = base.highlight ?? (base.passage.length < 120 ? base.passage : undefined)
+      const pool = [
+        ...Object.values(dynamicCitations),
+        ...chatMessages.flatMap((m) => m.citations ?? []),
+      ].filter((c) => c.documentTitle === base.documentTitle)
+
+      const bestRaw = [...pool].sort(
+        (a, b) =>
+          scoreNorthChunk(b.fullPassage ?? b.passage, anchor ?? b.highlight, base.page, b.page) -
+          scoreNorthChunk(a.fullPassage ?? a.passage, anchor ?? a.highlight, base.page, a.page)
+      )[0]
+
+      const merged = bestRaw ?? base
+      const citedPage = merged.page || base.page || 1
+
+      const citingMessage = chatMessages.find(
+        (m) => m.role === 'assistant' && m.citationIds?.includes(citationId)
+      )
+      if (
+        isNorthSource &&
+        citingMessage &&
+        answerReferencesGovernanceRegister(citingMessage.content)
+      ) {
+        setNorthDocumentView(null)
+        setScreen('action_tracking')
+        return
+      }
+
+      if (isNorthSource) {
+        void (async () => {
+          const { resolveNorthFileFromCatalog } = await import('@/lib/northFileApi')
+          const resolved = await resolveNorthFileFromCatalog({
+            fileId: merged.northFileId ?? base.northFileId,
+            title: merged.documentTitle,
+            highlight: anchor ?? merged.highlight,
+          }).catch(() => null)
+
+          setNorthDocumentView({
+            fileId: resolved?.fileId ?? merged.northFileId ?? base.northFileId,
+            title: resolved?.filename ?? merged.documentTitle,
+            page: citedPage,
+          })
+        })()
+        setPreviewCitation(null)
+        return
+      }
+
+      setPreviewCitation(base)
+      setScreen('ask_ai')
+      return
+    }
 
     const doc = documents.find((d) => d.id === citation.documentId)
     if (!doc) return
@@ -487,7 +637,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedDocumentPage(citation.page)
     setSelectedCitationId(citationId)
     setScreen('board_pack')
-  }, [])
+  }, [resolveCitation, dynamicCitations, chatMessages])
 
   const navigateToMeetings = useCallback(() => {
     setScreen('meetings')
@@ -573,6 +723,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reviewItems,
         updateReviewStatus,
         actionItems,
+        actionsSource,
+        governanceHealth,
+        refreshActions,
         updateActionStatus,
         showComparisonModal,
         setShowComparisonModal,
@@ -581,6 +734,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         navigateToBoardPack,
         navigateToMeetings,
         navigateToCitation,
+        resolveCitation,
+        previewCitation,
+        setPreviewCitation,
+        northDocumentView,
+        setNorthDocumentView,
         toast,
         showToast,
         canAccess,

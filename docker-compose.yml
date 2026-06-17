@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: board-governance-db
+    environment:
+      POSTGRES_USER: board
+      POSTGRES_PASSWORD: board
+      POSTGRES_DB: board_governance
+    ports:
+      - '5434:5432'
+    volumes:
+      - board_governance_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U board -d board_governance']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  board_governance_data:

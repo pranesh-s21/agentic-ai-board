@@ -49,6 +49,7 @@ export function BoardAIChatWidget({
   const agendaItem = meeting.agendaItems.find((a) => a.id === selectedAgendaItemId)
   const scope = embedded ? 'Current agenda item' : chatScope
   const isDisabled = aiFreeMode && selectedAgendaItemId === 'agenda-1' && embedded
+  const isQuerying = chatMessages.some((m) => m.loading)
 
   useEffect(() => {
     if (embedded && open) {
@@ -57,7 +58,7 @@ export function BoardAIChatWidget({
   }, [embedded, open, setChatScope])
 
   const handleSend = () => {
-    if (!input.trim() || isDisabled) return
+    if (!input.trim() || isDisabled || isQuerying) return
     sendChatMessage(input.trim(), scope)
     setInput('')
   }
@@ -141,55 +142,44 @@ export function BoardAIChatWidget({
             </div>
           )}
 
-          <div className="shrink-0 border-b border-du-purple-100 bg-du-purple-50/50 px-3 py-2">
-            <div className="flex flex-wrap gap-1">
-              {defaultChatPrompts.slice(0, 2).map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => sendChatMessage(prompt, scope)}
-                  className="rounded-full border border-du-purple-200 bg-white px-2 py-0.5 text-[10px] text-du-purple-700 transition-colors hover:border-du-magenta-300 hover:bg-du-magenta-50 disabled:opacity-40"
-                >
-                  {prompt.length > 42 ? `${prompt.slice(0, 42)}…` : prompt}
-                </button>
-              ))}
-            </div>
-            <Badge variant="cited" className="mt-1.5 text-[10px]">Source-Cited · {scope}</Badge>
-            <div className="mt-1.5">
-              <ChatProviderStatus />
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto bg-du-purple-50/30 px-3 py-3 scrollbar-thin">
-            <BoardChatMessages
-              messages={chatMessages}
-              compact
-              showActions={false}
-              onCitationClick={handleCitationClick}
-              onSaveAnswer={saveAIAnswer}
-              onSendToSecretariat={() => showToast('Sent to Secretariat')}
-              onOpenDecision={() => {
-                setSelectedDecisionId('decision-2')
-                setScreen('decision_memory')
-                onOpenChange(false)
-              }}
-            />
-          </div>
-
-          <div className="shrink-0 border-t border-navy-100 bg-white p-3">
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={isDisabled ? 'AI disabled for this item' : 'Ask a follow-up question...'}
-                disabled={isDisabled}
-                className="h-9 flex-1 text-sm"
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-du-purple-50/30">
+            <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
+              <BoardChatMessages
+                messages={chatMessages}
+                compact
+                showActions={false}
+                suggestedPrompts={defaultChatPrompts.slice(0, 2)}
+                onPromptClick={(prompt) => sendChatMessage(prompt, scope)}
+                promptsDisabled={isDisabled || isQuerying}
+                onCitationClick={handleCitationClick}
+                onSaveAnswer={saveAIAnswer}
+                onSendToSecretariat={() => showToast('Sent to Secretariat')}
+                onOpenDecision={() => {
+                  setSelectedDecisionId('decision-2')
+                  setScreen('decision_memory')
+                  onOpenChange(false)
+                }}
               />
-              <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={isDisabled || !input.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
+            </div>
+
+            <div className="shrink-0 border-t border-navy-100 bg-white p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Badge variant="cited" className="text-[10px]">Source-Cited · {scope}</Badge>
+                <ChatProviderStatus />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder={isDisabled ? 'AI disabled for this item' : isQuerying ? 'Briefing note in preparation…' : 'Ask a follow-up question...'}
+                  disabled={isDisabled || isQuerying}
+                  className="h-9 flex-1 text-sm"
+                />
+                <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={isDisabled || isQuerying || !input.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </>

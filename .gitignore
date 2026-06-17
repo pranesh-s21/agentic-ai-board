@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .env
+north-files/*
+!north-files/.gitkeep
 
 # Editor directories and files
 .vscode/*

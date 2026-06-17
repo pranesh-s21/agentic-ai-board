@@ -131,4 +131,28 @@
   .text-muted {
     @apply text-navy-500;
   }
+
+  .briefing-progress {
+    transition: width 0.5s ease-out;
+  }
+
+  /* North docx-preview — document-as-is rendering */
+  .north-docx-viewer .docx-wrapper {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .north-docx-viewer .docx-wrapper > section.north-docx-page {
+    background: white !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    margin: 0 auto 16px !important;
+    min-height: auto !important;
+  }
+
+  .north-docx-viewer mark.north-citation-highlight {
+    background-color: #fef08a;
+    padding: 0 2px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 2px #14b8a6;
+  }
 }
