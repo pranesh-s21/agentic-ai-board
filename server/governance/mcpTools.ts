@@ -2,10 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import * as z from 'zod/v4'
 import {
   createGovernanceAction,
-  getGovernanceAction,
-  listGovernanceActions,
+  getGovernanceActionForDisplay,
+  listGovernanceActionsForDisplay,
   updateGovernanceAction,
 } from './actionsRepository.ts'
+import { enrichActionWithDocumentTitle } from './documentReferenceResolver.ts'
+import { GOVERNANCE_ACTION_CREATE_RULES, PROVISIONAL_DUE_DAYS, provisionalDueDate } from './governanceRules.ts'
 import type { GovernanceAction } from './types.ts'
 
 function formatAction(action: GovernanceAction): string {
@@ -32,7 +34,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
       },
     },
     async ({ status, owner, document_reference_id, limit }) => {
-      const actions = await listGovernanceActions({
+      const actions = await listGovernanceActionsForDisplay({
         status,
         owner,
         documentReferenceId: document_reference_id,
@@ -61,7 +63,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
       },
     },
     async ({ id }) => {
-      const action = await getGovernanceAction(id)
+      const action = await getGovernanceActionForDisplay(id)
       if (!action) {
         return {
           content: [{ type: 'text', text: `Action not found: ${id}` }],
@@ -76,7 +78,8 @@ export function registerGovernanceMcpTools(server: McpServer): void {
     'create_governance_action',
     {
       description:
-        'Create a new board governance action. Requires title, owner, and due date. Use document_reference_id for North file or board document links.',
+        'Create a new board governance action. Infer owner from board context when appropriate; only pass due_date if the user explicitly gave a date. ' +
+        GOVERNANCE_ACTION_CREATE_RULES,
       inputSchema: {
         title: z.string().min(1).describe('Action title'),
         description: z.string().optional().describe('Detailed description'),
@@ -84,36 +87,64 @@ export function registerGovernanceMcpTools(server: McpServer): void {
           .string()
           .optional()
           .describe('North My Files ID or board document reference'),
-        owner: z.string().min(1).describe('Action owner (person or function)'),
-        due_date: z.string().describe('Due date in YYYY-MM-DD format'),
+        owner: z
+          .string()
+          .optional()
+          .describe(
+            'Responsible owner — infer from board pack/register when clear (e.g. Procurement, CFO); use "Unassigned" only if unknown'
+          ),
+        due_date: z
+          .string()
+          .optional()
+          .describe('YYYY-MM-DD — only when the user explicitly stated a due date; otherwise omit'),
         notes: z.string().optional().describe('Additional notes'),
         status: z
           .enum(['Open', 'Overdue', 'Completed', 'Pending Review', 'Escalated'])
           .optional()
-          .describe('Initial status (default Open)'),
+          .describe('Default Open when owner is assigned; Pending Review when Unassigned'),
         priority: z.enum(['High', 'Medium', 'Low']).optional().describe('Priority (default Medium)'),
         linked_decision: z.string().optional().describe('Linked board decision title'),
       },
     },
     async (input) => {
-      const action = await createGovernanceAction({
+      const owner = input.owner?.trim() || 'Unassigned'
+      const userNamedDue = !!input.due_date?.trim()
+      const ownerAssigned = owner !== 'Unassigned'
+
+      const created = await createGovernanceAction({
         title: input.title,
         description: input.description,
         documentReferenceId: input.document_reference_id ?? null,
-        owner: input.owner,
-        dueDate: input.due_date,
-        notes: input.notes,
-        status: input.status,
+        owner,
+        dueDate: userNamedDue ? input.due_date! : provisionalDueDate(),
+        notes: !userNamedDue
+          ? [
+              input.notes,
+              `${PROVISIONAL_DUE_DAYS}-day triage placeholder — user did not specify a due date; confirm in Action Tracking if needed.`,
+            ]
+              .filter(Boolean)
+              .join(' ')
+          : input.notes,
+        status: input.status ?? (ownerAssigned ? 'Open' : 'Pending Review'),
         priority: input.priority,
         linkedDecision: input.linked_decision ?? null,
       })
+      const action = await enrichActionWithDocumentTitle(created)
+
+      const summary = [
+        'Created governance action.',
+        ownerAssigned
+          ? `- Owner: ${action.owner} (inferred or user-specified — state briefly if inferred from board context).`
+          : '- Owner: Unassigned — could not infer from context; Pending Review.',
+        userNamedDue
+          ? `- Due date: ${action.dueDate} (user-specified).`
+          : `- Due date: ${action.dueDate} (${PROVISIONAL_DUE_DAYS}-day register placeholder — user did not request this date; mention it is for triage only).`,
+        '',
+        formatAction(action),
+      ].join('\n')
+
       return {
-        content: [
-          {
-            type: 'text',
-            text: `Created governance action:\n${formatAction(action)}`,
-          },
-        ],
+        content: [{ type: 'text', text: summary }],
       }
     }
   )
@@ -138,18 +169,19 @@ export function registerGovernanceMcpTools(server: McpServer): void {
       },
     },
     async ({ id, document_reference_id, due_date, linked_decision, ...rest }) => {
-      const action = await updateGovernanceAction(id, {
+      const updated = await updateGovernanceAction(id, {
         ...rest,
         documentReferenceId: document_reference_id,
         dueDate: due_date,
         linkedDecision: linked_decision,
       })
-      if (!action) {
+      if (!updated) {
         return {
           content: [{ type: 'text', text: `Action not found: ${id}` }],
           isError: true,
         }
       }
+      const action = await enrichActionWithDocumentTitle(updated)
       return {
         content: [{ type: 'text', text: `Updated governance action:\n${formatAction(action)}` }],
       }

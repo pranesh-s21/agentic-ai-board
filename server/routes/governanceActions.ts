@@ -2,10 +2,11 @@ import { Router } from 'express'
 import {
   createGovernanceAction,
   deleteGovernanceAction,
-  getGovernanceAction,
-  listGovernanceActions,
+  getGovernanceActionForDisplay,
+  listGovernanceActionsForDisplay,
   updateGovernanceAction,
 } from '../governance/actionsRepository.ts'
+import { enrichActionWithDocumentTitle } from '../governance/documentReferenceResolver.ts'
 import type {
   CreateGovernanceActionInput,
   GovernanceActionStatus,
@@ -23,7 +24,7 @@ governanceActionsRouter.get('/actions', async (req, res) => {
       typeof req.query.documentReferenceId === 'string' ? req.query.documentReferenceId : undefined
     const limit = req.query.limit ? Number(req.query.limit) : undefined
 
-    const actions = await listGovernanceActions({ status, owner, documentReferenceId, limit })
+    const actions = await listGovernanceActionsForDisplay({ status, owner, documentReferenceId, limit })
     res.json({ actions })
   } catch (error) {
     console.error('[governance/actions]', error)
@@ -35,7 +36,7 @@ governanceActionsRouter.get('/actions', async (req, res) => {
 
 governanceActionsRouter.get('/actions/:id', async (req, res) => {
   try {
-    const action = await getGovernanceAction(req.params.id)
+    const action = await getGovernanceActionForDisplay(req.params.id)
     if (!action) {
       res.status(404).json({ error: 'Action not found' })
       return
@@ -57,7 +58,7 @@ governanceActionsRouter.post('/actions', async (req, res) => {
       return
     }
 
-    const action = await createGovernanceAction(body)
+    const action = await enrichActionWithDocumentTitle(await createGovernanceAction(body))
     res.status(201).json({ action })
   } catch (error) {
     console.error('[governance/actions POST]', error)
@@ -69,11 +70,12 @@ governanceActionsRouter.post('/actions', async (req, res) => {
 
 governanceActionsRouter.patch('/actions/:id', async (req, res) => {
   try {
-    const action = await updateGovernanceAction(req.params.id, req.body as UpdateGovernanceActionInput)
-    if (!action) {
+    const updated = await updateGovernanceAction(req.params.id, req.body as UpdateGovernanceActionInput)
+    if (!updated) {
       res.status(404).json({ error: 'Action not found' })
       return
     }
+    const action = await enrichActionWithDocumentTitle(updated)
     res.json({ action })
   } catch (error) {
     console.error('[governance/actions PATCH]', error)

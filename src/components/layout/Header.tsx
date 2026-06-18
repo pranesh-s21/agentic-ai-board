@@ -2,7 +2,7 @@ import { useApp } from '@/context/AppContext'
 import { ROLE_LABELS, SCREEN_LABELS, type UserRole } from '@/types'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Input'
-import { Bell, ShieldCheck, User } from 'lucide-react'
+import { Bell, ShieldCheck } from 'lucide-react'
 import { meeting } from '@/data/mockData'
 import { formatDate } from '@/lib/utils'
 
@@ -36,12 +36,12 @@ export function Header() {
           <Bell className="h-5 w-5" />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-du-magenta-500 ring-2 ring-white" />
         </button>
-        <div className="flex items-center gap-2">
-          <Select
+        <Select
             id="role-select"
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
-            className="hidden h-9 w-40 border-du-purple-200 sm:flex"
+            className="h-9 w-44 border-du-purple-200"
+            aria-label="Switch role"
           >
             {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
               <option key={r} value={r}>
@@ -49,14 +49,6 @@ export function Header() {
               </option>
             ))}
           </Select>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-du-magenta-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-du-magenta-700 hover:shadow-md"
-          >
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">{ROLE_LABELS[role]}</span>
-          </button>
-        </div>
       </div>
     </header>
   )

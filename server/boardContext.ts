@@ -1,5 +1,6 @@
 import { citations, documentPageContent, documents, getDocumentPageContent } from '../src/data/mockData.ts'
 import { GOVERNANCE_FORMATTING_HINT } from './governance/chatContext.ts'
+import { GOVERNANCE_ACTION_CREATE_RULES } from './governance/governanceRules.ts'
 import {
   getNorthFileCitations,
   getNorthFileDocuments,
@@ -31,7 +32,9 @@ Rules:
 - Directors may ask about the "governance register", "action register", or "open actions" — these refer to board governance action items, not the risk register in board-pack documents.
 
 Formatting:
-${GOVERNANCE_FORMATTING_HINT}`
+${GOVERNANCE_FORMATTING_HINT}
+
+${GOVERNANCE_ACTION_CREATE_RULES}`
 }
 
 type RagSource = 'mock' | 'north-files' | 'both'

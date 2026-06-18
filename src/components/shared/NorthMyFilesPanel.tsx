@@ -7,6 +7,7 @@ import { ChatProviderStatus } from '@/components/shared/ChatProviderStatus'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import {
   AlertCircle,
@@ -63,6 +64,8 @@ export function NorthMyFilesPanel({
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<NorthMyFile | null>(null)
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
 
   const isNorthLive = chatHealth.provider === 'north'
   const isPageLayout = layout === 'page' && variant === 'org'
@@ -109,17 +112,48 @@ export function NorthMyFilesPanel({
     }
   }
 
-  const handleDelete = async (file: NorthMyFile) => {
-    if (!window.confirm(`Remove "${file.filename}" from organisation files?`)) return
+  const requestDelete = (file: NorthMyFile) => {
+    setPendingDelete(file)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    const file = pendingDelete
+    setDeletingFileId(file.id)
+    setError(null)
     try {
       await deleteNorthMyFile(file.id)
       await loadFiles()
       await refreshChatHealth()
       showToast(`${file.filename} removed`)
+      setPendingDelete(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeletingFileId(null)
     }
   }
+
+  const deleteConfirmDialog = (
+    <ConfirmDialog
+      open={!!pendingDelete}
+      title="Remove organisation file?"
+      description={
+        pendingDelete ? (
+          <>
+            <span className="font-medium text-navy-800">&ldquo;{pendingDelete.filename}&rdquo;</span> will be
+            removed from the shared library. Board AI will no longer cite this document.
+          </>
+        ) : null
+      }
+      confirmLabel="Remove file"
+      cancelLabel="Keep file"
+      variant="destructive"
+      loading={!!pendingDelete && deletingFileId === pendingDelete.id}
+      onConfirm={confirmDelete}
+      onCancel={() => !deletingFileId && setPendingDelete(null)}
+    />
+  )
 
   const openFile = (file: NorthMyFile) => {
     setNorthDocumentView({
@@ -226,6 +260,7 @@ export function NorthMyFilesPanel({
 
   if (!isNorthLive) {
     return (
+      <>
       <Card className={cn('border-navy-200/80', className)}>
         <CardHeader className="pb-2">
           <p className="text-sm font-semibold text-navy-900">Organisation Files</p>
@@ -237,6 +272,8 @@ export function NorthMyFilesPanel({
           </p>
         </CardContent>
       </Card>
+      {deleteConfirmDialog}
+      </>
     )
   }
 
@@ -245,6 +282,7 @@ export function NorthMyFilesPanel({
 
   if (isPageLayout) {
     return (
+      <>
       <div className={cn('flex min-h-0 flex-col overflow-hidden bg-white', className)}>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-navy-200 px-6 py-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -376,7 +414,7 @@ export function NorthMyFilesPanel({
                             variant="ghost"
                             size="sm"
                             className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => handleDelete(file)}
+                            onClick={() => requestDelete(file)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -406,6 +444,8 @@ export function NorthMyFilesPanel({
           </div>
         )}
       </div>
+      {deleteConfirmDialog}
+      </>
     )
   }
 
@@ -419,6 +459,7 @@ export function NorthMyFilesPanel({
         : `${files.length} document${files.length === 1 ? '' : 's'} indexed for Board AI`
 
   return (
+    <>
     <Card className={cn('flex flex-col border-navy-200/80', className)}>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <div>
@@ -484,7 +525,7 @@ export function NorthMyFilesPanel({
                     size="sm"
                     className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
                     title="Remove file"
-                    onClick={() => handleDelete(file)}
+                    onClick={() => requestDelete(file)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -495,5 +536,7 @@ export function NorthMyFilesPanel({
         </div>
       </CardContent>
     </Card>
+    {deleteConfirmDialog}
+    </>
   )
 }

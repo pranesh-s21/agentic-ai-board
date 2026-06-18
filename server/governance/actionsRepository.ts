@@ -1,4 +1,8 @@
 import { getPool } from '../db/pool.ts'
+import {
+  enrichActionWithDocumentTitle,
+  enrichActionsWithDocumentTitles,
+} from './documentReferenceResolver.ts'
 import type {
   CreateGovernanceActionInput,
   GovernanceAction,
@@ -162,4 +166,18 @@ export async function deleteGovernanceAction(id: string): Promise<boolean> {
 export async function countGovernanceActions(): Promise<number> {
   const res = await getPool().query<{ count: string }>('SELECT COUNT(*)::text AS count FROM governance_actions')
   return Number(res.rows[0]?.count ?? 0)
+}
+
+/** List actions with documentReferenceTitle resolved from board pack / North My Files. */
+export async function listGovernanceActionsForDisplay(
+  query: ListGovernanceActionsQuery = {}
+): Promise<GovernanceAction[]> {
+  return enrichActionsWithDocumentTitles(await listGovernanceActions(query))
+}
+
+/** Get one action with documentReferenceTitle resolved. */
+export async function getGovernanceActionForDisplay(id: string): Promise<GovernanceAction | null> {
+  const action = await getGovernanceAction(id)
+  if (!action) return null
+  return enrichActionWithDocumentTitle(action)
 }

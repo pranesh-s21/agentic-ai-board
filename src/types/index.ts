@@ -119,6 +119,7 @@ export interface ActionItem {
   priority: 'High' | 'Medium' | 'Low'
   description: string
   documentReferenceId?: string | null
+  documentReferenceTitle?: string | null
   notes?: string
   linkedMeetingId?: string
 }

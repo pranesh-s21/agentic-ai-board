@@ -1,4 +1,4 @@
-import { listGovernanceActions } from './actionsRepository.ts'
+import { listGovernanceActionsForDisplay } from './actionsRepository.ts'
 import type { GovernanceAction, GovernanceActionStatus } from './types.ts'
 import type { ChatServiceResponse } from '../types.ts'
 import {
@@ -7,6 +7,7 @@ import {
   isGovernanceRegisterQuery,
   shouldUseGovernanceRegisterCitation,
 } from '../../src/lib/governanceCitation.ts'
+import { GOVERNANCE_ACTION_CREATE_RULES } from './governanceRules.ts'
 
 export { GOVERNANCE_REGISTER_CITATION_ID }
 
@@ -34,6 +35,11 @@ function formatActionMarkdown(action: GovernanceAction, index: number): string {
   ]
   if (action.description) lines.push(`- Description: ${action.description}`)
   if (action.linkedDecision) lines.push(`- Linked decision: ${action.linkedDecision}`)
+  if (action.documentReferenceTitle) {
+    lines.push(`- Document: ${action.documentReferenceTitle}`)
+  } else if (action.documentReferenceId) {
+    lines.push(`- Document reference: ${action.documentReferenceId}`)
+  }
   return lines.join('\n')
 }
 
@@ -83,7 +89,7 @@ export async function tryGovernanceRegisterAnswer(
 
   try {
     const statusHint = inferStatusFilter(message)
-    const actions = await listGovernanceActions({ limit: 100 })
+    const actions = await listGovernanceActionsForDisplay({ limit: 100 })
 
     return {
       answer: formatActionsAnswer(actions, statusHint),
@@ -111,4 +117,5 @@ export const GOVERNANCE_FORMATTING_HINT = `When listing structured items (action
 - Do not restart numbering for each item.
 - Use **bold** for item titles only; keep attribute labels plain.
 - For tabular data, use markdown pipe tables (| Column | Column |) — not HTML.
-- When answering about board governance actions, cite the Actions register — not North My Files documents.`
+- When answering about board governance actions, cite the Actions register — not North My Files documents.
+${GOVERNANCE_ACTION_CREATE_RULES}`

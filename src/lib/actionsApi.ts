@@ -14,6 +14,7 @@ export interface GovernanceActionRecord {
   title: string
   description: string
   documentReferenceId: string | null
+  documentReferenceTitle?: string | null
   owner: string
   dueDate: string
   notes: string
@@ -36,9 +37,36 @@ function toActionItem(record: GovernanceActionRecord): ActionItem {
     priority: record.priority,
     description: record.description,
     documentReferenceId: record.documentReferenceId,
+    documentReferenceTitle: record.documentReferenceTitle ?? null,
     notes: record.notes,
     linkedMeetingId: record.linkedMeetingId ?? undefined,
   }
+}
+
+export interface CreateGovernanceActionInput {
+  title: string
+  description?: string
+  documentReferenceId?: string | null
+  owner: string
+  dueDate: string
+  notes?: string
+  status?: ActionStatus
+  priority?: 'High' | 'Medium' | 'Low'
+  linkedDecision?: string
+  linkedMeetingId?: string | null
+}
+
+export interface UpdateGovernanceActionInput {
+  title?: string
+  description?: string
+  documentReferenceId?: string | null
+  owner?: string
+  dueDate?: string
+  notes?: string
+  status?: ActionStatus
+  priority?: 'High' | 'Medium' | 'Low'
+  linkedDecision?: string | null
+  linkedMeetingId?: string | null
 }
 
 export async function fetchGovernanceHealth(): Promise<GovernanceHealth> {
@@ -61,10 +89,17 @@ export async function updateGovernanceActionStatus(
   id: string,
   status: ActionStatus
 ): Promise<ActionItem> {
+  return updateGovernanceAction(id, { status })
+}
+
+export async function updateGovernanceAction(
+  id: string,
+  input: UpdateGovernanceActionInput
+): Promise<ActionItem> {
   const res = await fetch(`${API_BASE}/actions/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(input),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -73,16 +108,15 @@ export async function updateGovernanceActionStatus(
   return toActionItem((data as { action: GovernanceActionRecord }).action)
 }
 
-export async function createGovernanceAction(input: {
-  title: string
-  description?: string
-  documentReferenceId?: string | null
-  owner: string
-  dueDate: string
-  notes?: string
-  priority?: 'High' | 'Medium' | 'Low'
-  linkedDecision?: string
-}): Promise<ActionItem> {
+export async function deleteGovernanceAction(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/actions/${id}`, { method: 'DELETE' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : `Delete failed (${res.status})`)
+  }
+}
+
+export async function createGovernanceAction(input: CreateGovernanceActionInput): Promise<ActionItem> {
   const res = await fetch(`${API_BASE}/actions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

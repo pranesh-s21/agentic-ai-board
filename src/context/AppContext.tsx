@@ -23,6 +23,7 @@ import type {
   ResolvedChatCitation,
   Citation,
   NorthDocumentView,
+  ActionItem,
 } from '@/types'
 import { scoreNorthChunk } from '@/lib/northExcerpt'
 import {
@@ -48,7 +49,12 @@ import {
   fetchGovernanceActions,
   fetchGovernanceHealth,
   updateGovernanceActionStatus,
+  updateGovernanceAction,
+  deleteGovernanceAction,
+  createGovernanceAction,
   type GovernanceHealth,
+  type CreateGovernanceActionInput,
+  type UpdateGovernanceActionInput,
 } from '@/lib/actionsApi'
 
 interface AppContextValue {
@@ -108,6 +114,9 @@ interface AppContextValue {
   actionsSource: 'database' | 'mock'
   governanceHealth: GovernanceHealth | null
   refreshActions: () => Promise<void>
+  createAction: (input: CreateGovernanceActionInput) => Promise<ActionItem | null>
+  updateAction: (id: string, input: UpdateGovernanceActionInput) => Promise<ActionItem | null>
+  deleteAction: (id: string) => Promise<boolean>
   updateActionStatus: (id: string, status: ActionStatus) => void
   showComparisonModal: boolean
   setShowComparisonModal: (show: boolean) => void
@@ -127,6 +136,16 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
+
+function shouldRefreshActionsAfterChat(userMessage: string, answer: string, toolPlan?: string): boolean {
+  if (toolPlan && /governance_action|create_governance|update_governance/i.test(toolPlan)) {
+    return true
+  }
+  if (/create.*(?:an?\s+)?action|add.*(?:an?\s+)?action/i.test(userMessage)) {
+    return /created governance action|action id:|has been created|added to the register/i.test(answer)
+  }
+  return false
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole>('board_member')
@@ -217,6 +236,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshActions()
   }, [refreshChatHealth, refreshActions])
 
+  useEffect(() => {
+    if (screen === 'action_tracking') {
+      void refreshActions()
+    }
+  }, [screen, refreshActions])
+
   const sendChatMessage = useCallback(
     (content: string, scope: string) => {
       const userMsg: ChatMessage = {
@@ -267,6 +292,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
           }
           setChatMessages((prev) => [...prev.filter((m) => !m.loading), assistantMsg])
+          if (
+            shouldRefreshActionsAfterChat(content, finalResponse.answer, finalResponse.toolPlan)
+          ) {
+            void refreshActions()
+          }
         })
         .catch((error) => {
           console.error('Chat error:', error)
@@ -288,7 +318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setChatMessages((prev) => [...prev.filter((m) => !m.loading), assistantMsg])
         })
     },
-    [chatMessages]
+    [chatMessages, refreshActions]
   )
 
   const getSaveFolderId = useCallback(
@@ -542,6 +572,114 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [actionsSource, showToast]
   )
 
+  const createAction = useCallback(
+    async (input: CreateGovernanceActionInput): Promise<ActionItem | null> => {
+      if (actionsSource === 'database') {
+        try {
+          const created = await createGovernanceAction(input)
+          setActionItems((prev) => [created, ...prev])
+          setGovernanceHealth((prev) =>
+            prev ? { ...prev, actionCount: prev.actionCount + 1 } : prev
+          )
+          showToast('Action added to governance register')
+          return created
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'Could not create action')
+          return null
+        }
+      }
+
+      const mock: ActionItem = {
+        id: `action-${Date.now()}`,
+        title: input.title,
+        owner: input.owner,
+        dueDate: input.dueDate,
+        status: input.status ?? 'Open',
+        linkedDecision: input.linkedDecision ?? '',
+        priority: input.priority ?? 'Medium',
+        description: input.description ?? '',
+        documentReferenceId: input.documentReferenceId,
+        notes: input.notes,
+        linkedMeetingId: input.linkedMeetingId ?? undefined,
+      }
+      setActionItems((prev) => [mock, ...prev])
+      showToast('Action added (mock register — not persisted to database)')
+      return mock
+    },
+    [actionsSource, showToast]
+  )
+
+  const updateAction = useCallback(
+    async (id: string, input: UpdateGovernanceActionInput): Promise<ActionItem | null> => {
+      if (actionsSource === 'database') {
+        try {
+          const updated = await updateGovernanceAction(id, input)
+          setActionItems((prev) => prev.map((item) => (item.id === id ? updated : item)))
+          showToast('Action updated')
+          return updated
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'Could not update action')
+          return null
+        }
+      }
+
+      let updated: ActionItem | undefined
+      setActionItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item
+          const next: ActionItem = {
+            ...item,
+            title: input.title ?? item.title,
+            owner: input.owner ?? item.owner,
+            dueDate: input.dueDate ?? item.dueDate,
+            status: input.status ?? item.status,
+            priority: input.priority ?? item.priority,
+            linkedDecision: input.linkedDecision ?? item.linkedDecision,
+            description: input.description ?? item.description,
+            notes: input.notes ?? item.notes,
+            documentReferenceId:
+              input.documentReferenceId !== undefined
+                ? input.documentReferenceId
+                : item.documentReferenceId,
+            linkedMeetingId:
+              input.linkedMeetingId != null ? input.linkedMeetingId : item.linkedMeetingId,
+          }
+          updated = next
+          return next
+        })
+      )
+      showToast('Action updated (mock register — not persisted to database)')
+      return updated ?? null
+    },
+    [actionsSource, showToast]
+  )
+
+  const deleteAction = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (actionsSource === 'database') {
+        try {
+          await deleteGovernanceAction(id)
+          setActionItems((prev) => prev.filter((item) => item.id !== id))
+          setGovernanceHealth((prev) =>
+            prev ? { ...prev, actionCount: Math.max(0, prev.actionCount - 1) } : prev
+          )
+          setSelectedActionId((current) => (current === id ? null : current))
+          showToast('Action removed from register')
+          return true
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'Could not delete action')
+          return false
+        }
+      }
+
+      setActionItems((prev) => prev.filter((item) => item.id !== id))
+      setSelectedActionId((current) => (current === id ? null : current))
+      showToast('Action removed (mock register — not persisted to database)')
+      return true
+    },
+    [actionsSource, showToast]
+  )
+
   const navigateToBoardPack = useCallback((agendaItemId?: string) => {
     if (agendaItemId) setSelectedAgendaItemId(agendaItemId)
     setScreen('board_pack')
@@ -653,7 +791,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'governance_audit':
           return role === 'governance' || role === 'chair'
         case 'edit_actions':
-          return role === 'secretariat'
+          return role === 'secretariat' || role === 'chair'
         case 'toggle_ai_free':
           return role === 'chair'
         case 'approve_ai':
@@ -726,6 +864,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         actionsSource,
         governanceHealth,
         refreshActions,
+        createAction,
+        updateAction,
+        deleteAction,
         updateActionStatus,
         showComparisonModal,
         setShowComparisonModal,

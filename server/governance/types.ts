@@ -12,6 +12,7 @@ export interface GovernanceAction {
   title: string
   description: string
   documentReferenceId: string | null
+  documentReferenceTitle?: string | null
   owner: string
   dueDate: string
   notes: string
