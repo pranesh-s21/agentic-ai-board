@@ -1,13 +1,12 @@
 import { useApp } from '@/context/AppContext'
-import { ROLE_LABELS, SCREEN_LABELS, type UserRole } from '@/types'
+import { ROLE_LABELS, SCREEN_LABELS, PROTOTYPE_ROLES, type UserRole } from '@/types'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Input'
 import { Bell, ShieldCheck } from 'lucide-react'
-import { meeting } from '@/data/mockData'
 import { formatDate } from '@/lib/utils'
 
 export function Header() {
-  const { role, setRole, screen, aiFreeMode } = useApp()
+  const { role, setRole, screen, aiFreeMode, activeMeeting, packStatus } = useApp()
 
   return (
     <header className="flex h-[4.5rem] shrink-0 items-center justify-between border-b border-du-purple-100 bg-white px-6 shadow-sm">
@@ -16,7 +15,9 @@ export function Header() {
             {SCREEN_LABELS[screen]}
           </h1>
           <p className="text-xs font-medium text-navy-600">
-            {meeting.title} · {formatDate(meeting.date)}
+            {activeMeeting.title} · {formatDate(activeMeeting.date)}
+            {role === 'secretariat' && packStatus === 'draft' && ' · Pack in draft'}
+            {role === 'board_member' && packStatus === 'published' && ' · Pack published'}
           </p>
         </div>
       <div className="flex items-center gap-3">
@@ -25,6 +26,9 @@ export function Header() {
             AI-Free Mode Active
           </Badge>
         )}
+        <Badge variant={role === 'secretariat' ? 'official' : 'approved'} className="hidden sm:inline-flex">
+          {ROLE_LABELS[role]}
+        </Badge>
         <div className="hidden items-center gap-2 rounded-full border border-du-cyan-200 bg-du-cyan-50 px-3 py-1.5 md:flex">
           <ShieldCheck className="h-3.5 w-3.5 text-du-cyan-600" />
           <span className="text-xs font-semibold text-du-cyan-700">Secure Session</span>
@@ -43,7 +47,7 @@ export function Header() {
             className="h-9 w-44 border-du-purple-200"
             aria-label="Switch role"
           >
-            {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+            {PROTOTYPE_ROLES.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>

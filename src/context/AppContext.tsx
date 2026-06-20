@@ -24,7 +24,13 @@ import type {
   Citation,
   NorthDocumentView,
   ActionItem,
+  PackStatus,
+  AgendaItem,
+  Document,
+  BoardCommunication,
+  SecretariatReviewItem,
 } from '@/types'
+import { canAccessScreen, defaultScreenForRole } from '@/config/roleNavigation'
 import { scoreNorthChunk } from '@/lib/northExcerpt'
 import {
   meeting,
@@ -35,8 +41,13 @@ import {
   initialPrivateWorkspaces,
   initialWorkspaceFolders,
   initialWorkspaceItems,
-  documents,
+  initialBoardCommunication,
+  documents as staticDocuments,
   getCitationById,
+  documentCatalog,
+  getDemoPackState,
+  getEmptyPackState,
+  calcAgendaPreparationProgress,
   getDocumentById,
 } from '@/data/mockData'
 import { fetchChatHealth, sendChatToAgent } from '@/lib/chatApi'
@@ -62,6 +73,33 @@ interface AppContextValue {
   setRole: (role: UserRole) => void
   screen: Screen
   setScreen: (screen: Screen) => void
+  packStatus: PackStatus
+  isPackPublished: boolean
+  packAgendaItems: AgendaItem[]
+  packDocuments: Document[]
+  activeMeeting: typeof meeting
+  updateAgendaItem: (id: string, updates: Partial<AgendaItem>) => void
+  addAgendaItem: (input: { title: string; decisionRequired?: boolean; aiAvailable?: boolean }) => void
+  removeAgendaItem: (id: string) => void
+  attachCatalogDocument: (agendaId: string, catalogId: string) => void
+  uploadPackDocument: (agendaId: string, input: { title: string; type: string; pages: number }) => void
+  detachDocumentFromAgenda: (agendaId: string, documentId: string) => void
+  startFreshPack: () => void
+  loadDemoPack: () => void
+  publishBoardPack: () => void
+  revertBoardPackToDraft: () => void
+  submitToSecretariat: (payload: {
+    title: string
+    content: string
+    type?: SecretariatReviewItem['type']
+    citationIds?: string[]
+  }) => void
+  boardCommunication: BoardCommunication
+  publishBoardCommunication: () => void
+  canAccessScreen: (screen: Screen) => boolean
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+  toggleSidebar: () => void
   selectedMeetingId: string
   selectedAgendaItemId: string
   setSelectedAgendaItemId: (id: string) => void
@@ -148,8 +186,30 @@ function shouldRefreshActionsAfterChat(userMessage: string, answer: string, tool
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole>('board_member')
-  const [screen, setScreen] = useState<Screen>('dashboard')
+  const [role, setRoleState] = useState<UserRole>('board_member')
+  const [screen, setScreenState] = useState<Screen>('dashboard')
+  const [packStatus, setPackStatus] = useState<PackStatus>('draft')
+  const [packAgendaItems, setPackAgendaItems] = useState<AgendaItem[]>(() => getEmptyPackState().agendaItems)
+  const [packDocuments, setPackDocuments] = useState<Document[]>(() => getEmptyPackState().documents)
+  const [boardCommunication, setBoardCommunication] = useState<BoardCommunication>(initialBoardCommunication)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-collapsed', String(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
   const [selectedAgendaItemId, setSelectedAgendaItemId] = useState(STRATEGIC_AGENDA_ID)
   const [selectedDocumentId, setSelectedDocumentId] = useState('doc-1')
   const [selectedDocumentPage, setSelectedDocumentPage] = useState(1)
@@ -203,6 +263,271 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToast(message)
     setTimeout(() => setToast(null), 3000)
   }, [])
+
+  const isPackPublished = packStatus === 'published'
+
+  const activeMeeting = {
+    ...meeting,
+    agendaItems: packAgendaItems,
+    status: (isPackPublished ? 'Scheduled' : 'In Preparation') as typeof meeting.status,
+  }
+
+  const setScreen = useCallback(
+    (next: Screen) => {
+      if (!canAccessScreen(next, role, packStatus)) return
+      setScreenState(next)
+    },
+    [role, packStatus]
+  )
+
+  const setRole = useCallback(
+    (nextRole: UserRole) => {
+      setRoleState(nextRole)
+      setScreenState((current) => {
+        const preferred = defaultScreenForRole(nextRole)
+        if (!canAccessScreen(current, nextRole, packStatus)) return preferred
+        return current
+      })
+    },
+    [packStatus]
+  )
+
+  useEffect(() => {
+    if (!canAccessScreen(screen, role, packStatus)) {
+      setScreenState(defaultScreenForRole(role))
+    }
+  }, [screen, role, packStatus])
+
+  const updateAgendaItem = useCallback((id: string, updates: Partial<AgendaItem>) => {
+    setPackAgendaItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    )
+  }, [])
+
+  const addAgendaItem = useCallback(
+    (input: { title: string; decisionRequired?: boolean; aiAvailable?: boolean }) => {
+      const title = input.title.trim()
+      if (!title) return null
+      const id = `agenda-${Date.now()}`
+      setPackAgendaItems((prev) => {
+        const item: AgendaItem = {
+          id,
+          title,
+          order: prev.length + 1,
+          status: 'Draft',
+          decisionRequired: input.decisionRequired ?? false,
+          aiAvailable: input.aiAvailable ?? true,
+          preparationProgress: 0,
+          documentIds: [],
+        }
+        return [...prev, item]
+      })
+      setSelectedAgendaItemId(id)
+      showToast('Agenda item added')
+      return id
+    },
+    [showToast]
+  )
+
+  const removeAgendaItem = useCallback(
+    (id: string) => {
+      setPackAgendaItems((prev) => {
+        const next = prev
+          .filter((item) => item.id !== id)
+          .map((item, index) => ({ ...item, order: index + 1 }))
+        if (selectedAgendaItemId === id) {
+          setSelectedAgendaItemId(next[0]?.id ?? '')
+        }
+        return next
+      })
+      setPackDocuments((prev) =>
+        prev.map((doc) => (doc.agendaItemId === id ? { ...doc, agendaItemId: '' } : doc))
+      )
+      showToast('Agenda item removed')
+    },
+    [selectedAgendaItemId, showToast]
+  )
+
+  const ensurePackDocument = useCallback(
+    (catalogEntry: (typeof documentCatalog)[0], agendaId: string): string => {
+      const existing = staticDocuments.find((d) => d.id === catalogEntry.id)
+      const docId = catalogEntry.id.startsWith('catalog-')
+        ? `doc-${Date.now()}-${catalogEntry.id}`
+        : catalogEntry.id
+
+      setPackDocuments((prev) => {
+        if (prev.some((d) => d.id === docId)) return prev
+        const base = existing ?? {
+          id: docId,
+          title: catalogEntry.title,
+          type: catalogEntry.type,
+          pages: catalogEntry.pages,
+          agendaItemId: agendaId,
+        }
+        return [...prev, { ...base, id: docId, agendaItemId: agendaId }]
+      })
+      return docId
+    },
+    []
+  )
+
+  const attachCatalogDocument = useCallback(
+    (agendaId: string, catalogId: string) => {
+      const entry = documentCatalog.find((c) => c.id === catalogId)
+      if (!entry) return
+
+      const docId = ensurePackDocument(entry, agendaId)
+      setPackAgendaItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== agendaId || item.documentIds.includes(docId)) return item
+          const documentIds = [...item.documentIds, docId]
+          return {
+            ...item,
+            documentIds,
+            status: item.status === 'Ready' ? 'In Review' : item.status,
+            preparationProgress: calcAgendaPreparationProgress(
+              documentIds.length,
+              item.status === 'Ready' ? 'In Review' : item.status
+            ),
+          }
+        })
+      )
+      showToast(`Attached ${entry.title}`)
+    },
+    [ensurePackDocument, showToast]
+  )
+
+  const uploadPackDocument = useCallback(
+    (agendaId: string, input: { title: string; type: string; pages: number }) => {
+      const title = input.title.trim()
+      if (!title) return
+
+      const ext = input.type.toLowerCase()
+      const normalizedTitle = title.toLowerCase().endsWith(`.${ext}`)
+        ? title
+        : `${title}.${ext}`
+      const docId = `doc-${Date.now()}`
+      const doc: Document = {
+        id: docId,
+        title: normalizedTitle,
+        type: input.type.toUpperCase(),
+        pages: Math.max(1, input.pages),
+        agendaItemId: agendaId,
+      }
+
+      setPackDocuments((prev) => [...prev, doc])
+      setPackAgendaItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== agendaId) return item
+          const documentIds = [...item.documentIds, docId]
+          return {
+            ...item,
+            documentIds,
+            preparationProgress: calcAgendaPreparationProgress(documentIds.length, item.status),
+          }
+        })
+      )
+      showToast(`Added ${normalizedTitle}`)
+    },
+    [showToast]
+  )
+
+  const detachDocumentFromAgenda = useCallback(
+    (agendaId: string, documentId: string) => {
+      setPackAgendaItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== agendaId) return item
+          const documentIds = item.documentIds.filter((id) => id !== documentId)
+          return {
+            ...item,
+            documentIds,
+            status: item.status === 'Ready' ? 'In Review' : item.status,
+            preparationProgress: calcAgendaPreparationProgress(documentIds.length, item.status),
+          }
+        })
+      )
+      showToast('Document removed from agenda item')
+    },
+    [showToast]
+  )
+
+  const startFreshPack = useCallback(() => {
+    const empty = getEmptyPackState()
+    setPackAgendaItems(empty.agendaItems)
+    setPackDocuments(empty.documents)
+    setPackStatus('draft')
+    setSelectedAgendaItemId('')
+    showToast('Started a fresh board pack — add agenda items and attach documents')
+  }, [showToast])
+
+  const loadDemoPack = useCallback(() => {
+    const demo = getDemoPackState()
+    setPackAgendaItems(demo.agendaItems)
+    setPackDocuments(demo.documents)
+    setPackStatus('draft')
+    setSelectedAgendaItemId(demo.agendaItems[0]?.id ?? '')
+    showToast('Loaded demo pack — ready to review or publish')
+  }, [showToast])
+
+  const publishBoardPack = useCallback(() => {
+    setPackStatus('published')
+    setPackAgendaItems((prev) =>
+      prev.map((item) =>
+        item.documentIds.length > 0 && (item.status === 'Ready' || item.preparationProgress >= 70)
+          ? { ...item, status: 'Ready' as const, preparationProgress: 100 }
+          : item
+      )
+    )
+    if (packAgendaItems[0]?.documentIds[0]) {
+      setSelectedDocumentId(packAgendaItems[0].documentIds[0])
+    }
+    showToast('Board pack published — directors can now review materials')
+  }, [packAgendaItems, showToast])
+
+  const revertBoardPackToDraft = useCallback(() => {
+    setPackStatus('draft')
+    showToast('Board pack reverted to draft — hidden from directors')
+  }, [showToast])
+
+  const submitToSecretariat = useCallback(
+    (payload: {
+      title: string
+      content: string
+      type?: SecretariatReviewItem['type']
+      citationIds?: string[]
+    }) => {
+      const item: SecretariatReviewItem = {
+        id: `review-${Date.now()}`,
+        title: payload.title,
+        type: payload.type ?? 'question',
+        content: payload.content,
+        citationIds: payload.citationIds ?? [],
+        status: 'Pending Review',
+        version: 'v1.0',
+        versionHistory: ['v1.0 — Submitted by director'],
+        createdAt: new Date().toISOString(),
+        source: 'director',
+        submittedBy: 'Board Member',
+      }
+      setReviewItems((prev) => [item, ...prev])
+      showToast('Sent to Secretariat for review')
+    },
+    [showToast]
+  )
+
+  const publishBoardCommunication = useCallback(() => {
+    setBoardCommunication((prev) => ({
+      ...prev,
+      status: 'published',
+      publishedAt: new Date().toISOString(),
+    }))
+    showToast('Meeting outcomes published to all board members')
+  }, [showToast])
+
+  const canAccessScreenFn = useCallback(
+    (target: Screen) => canAccessScreen(target, role, packStatus),
+    [role, packStatus]
+  )
 
   const setAiEnabledForAgenda = useCallback((agendaId: string, enabled: boolean) => {
     setAiEnabledByAgenda((prev) => ({ ...prev, [agendaId]: enabled }))
@@ -681,9 +1006,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const navigateToBoardPack = useCallback((agendaItemId?: string) => {
+    if (!canAccessScreen('board_pack', role, packStatus)) {
+      showToast('Board pack is not yet published by Secretariat')
+      return
+    }
     if (agendaItemId) setSelectedAgendaItemId(agendaItemId)
-    setScreen('board_pack')
-  }, [])
+    setScreenState('board_pack')
+  }, [role, packStatus, showToast])
 
   const resolveCitation = useCallback(
     (citationId: string) => {
@@ -765,7 +1094,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const doc = documents.find((d) => d.id === citation.documentId)
+    const doc = packDocuments.find((d) => d.id === citation.documentId) ?? staticDocuments.find((d) => d.id === citation.documentId)
     if (!doc) return
 
     const agendaItem = meeting.agendaItems.find((a) => a.documentIds.includes(doc.id))
@@ -774,8 +1103,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedDocumentId(doc.id)
     setSelectedDocumentPage(citation.page)
     setSelectedCitationId(citationId)
-    setScreen('board_pack')
-  }, [resolveCitation, dynamicCitations, chatMessages])
+    if (!canAccessScreen('board_pack', role, packStatus)) {
+      showToast('Board pack is not yet published by Secretariat')
+      return
+    }
+    setScreenState('board_pack')
+  }, [resolveCitation, dynamicCitations, chatMessages, role, packStatus, showToast, packDocuments])
 
   const navigateToMeetings = useCallback(() => {
     setScreen('meetings')
@@ -787,6 +1120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'chair_controls':
           return role === 'chair'
         case 'secretariat_review':
+        case 'pack_preparation':
           return role === 'secretariat' || role === 'chair'
         case 'governance_audit':
           return role === 'governance' || role === 'chair'
@@ -798,11 +1132,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return role === 'secretariat'
         case 'send_to_secretariat':
           return role === 'board_member' || role === 'chair'
+        case 'view_published_pack':
+          return isPackPublished
+        case 'private_workspace':
+          return role === 'board_member' || role === 'chair'
         default:
           return true
       }
     },
-    [role]
+    [role, isPackPublished]
   )
 
   return (
@@ -812,6 +1150,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRole,
         screen,
         setScreen,
+        packStatus,
+        isPackPublished,
+        packAgendaItems,
+        packDocuments,
+        activeMeeting,
+        updateAgendaItem,
+        addAgendaItem,
+        removeAgendaItem,
+        attachCatalogDocument,
+        uploadPackDocument,
+        detachDocumentFromAgenda,
+        startFreshPack,
+        loadDemoPack,
+        publishBoardPack,
+        revertBoardPackToDraft,
+        submitToSecretariat,
+        boardCommunication,
+        publishBoardCommunication,
+        canAccessScreen: canAccessScreenFn,
+        sidebarCollapsed,
+        setSidebarCollapsed,
+        toggleSidebar,
         selectedMeetingId: meeting.id,
         selectedAgendaItemId,
         setSelectedAgendaItemId,

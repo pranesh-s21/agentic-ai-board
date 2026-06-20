@@ -37,6 +37,7 @@ interface MeetingCalendarProps {
   onSelectMeeting?: (meeting: CalendarMeeting) => void
   selectedDate?: string
   onDateSelect?: (dateKey: string) => void
+  selectedMeetingId?: string
   className?: string
 }
 
@@ -45,6 +46,7 @@ export function MeetingCalendar({
   onSelectMeeting,
   selectedDate: controlledDate,
   onDateSelect,
+  selectedMeetingId,
   className,
 }: MeetingCalendarProps) {
   const initial = parseDateKey('2026-06-18')
@@ -57,6 +59,9 @@ export function MeetingCalendar({
   const handleDateSelect = (dateKey: string) => {
     if (onDateSelect) onDateSelect(dateKey)
     else setInternalSelected(dateKey)
+
+    const dayMeetings = getMeetingsForDate(dateKey)
+    if (dayMeetings.length === 1) onSelectMeeting?.(dayMeetings[0])
   }
 
   const calendarDays = useMemo(() => {
@@ -171,54 +176,69 @@ export function MeetingCalendar({
           })}
         </div>
 
-        {!compact && (
-          <div className="border-t border-navy-100 bg-white p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-navy-600">
+        <div className={cn('border-t border-navy-100 bg-white', compact ? 'p-3' : 'p-4')}>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-600">
               {formatDate(selectedDate)}
             </p>
             {selectedMeetings.length === 0 ? (
-              <p className="rounded-md border border-dashed border-navy-300 py-6 text-center text-sm font-medium text-navy-600">
+              <p className="rounded-md border border-dashed border-navy-300 py-4 text-center text-xs font-medium text-navy-600">
                 No meetings scheduled
               </p>
             ) : (
               <div className="space-y-2">
-                {selectedMeetings.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => onSelectMeeting?.(m)}
-                    className="w-full rounded-lg border border-navy-100 p-3 text-left transition-all hover:border-teal-200 hover:shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-navy-900">{m.title}</p>
-                      <Badge variant={m.type === 'Board' ? 'official' : m.type === 'Committee' ? 'approved' : 'pending'}>
-                        {m.type}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs font-medium text-navy-600">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {m.time}{m.endTime ? ` – ${m.endTime}` : ''}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {m.location}
-                      </span>
-                    </div>
-                  </button>
+                {selectedMeetings.map((m) => {
+                  const isActive = selectedMeetingId === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onSelectMeeting?.(m)}
+                      className={cn(
+                        'w-full rounded-lg border p-3 text-left transition-all',
+                        isActive
+                          ? 'border-du-magenta-300 bg-du-magenta-50/60 shadow-sm ring-1 ring-du-magenta-200'
+                          : 'border-navy-100 hover:border-teal-200 hover:shadow-sm'
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={cn('text-sm font-medium', compact ? 'text-xs' : 'text-sm', 'text-navy-900')}>
+                          {m.title}
+                        </p>
+                        <Badge
+                          variant={m.type === 'Board' ? 'official' : m.type === 'Committee' ? 'approved' : 'pending'}
+                        >
+                          {m.type}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-3 text-xs font-medium text-navy-600">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {m.time}
+                          {m.endTime ? ` – ${m.endTime}` : ''}
+                        </span>
+                        {!compact && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {m.location}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {!compact && (
+              <div className="mt-4 flex flex-wrap gap-3 border-t border-navy-50 pt-3">
+                {(['Board', 'Committee', 'Preparation'] as const).map((type) => (
+                  <div key={type} className="flex items-center gap-1.5 text-xs font-medium text-navy-600">
+                    <span className={cn('h-2 w-2 rounded-full', typeColors[type])} />
+                    {type}
+                  </div>
                 ))}
               </div>
             )}
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-navy-50 pt-3">
-              {(['Board', 'Committee', 'Preparation'] as const).map((type) => (
-                <div key={type} className="flex items-center gap-1.5 text-xs font-medium text-navy-600">
-                  <span className={cn('h-2 w-2 rounded-full', typeColors[type])} />
-                  {type}
-                </div>
-              ))}
-            </div>
           </div>
-        )}
       </CardContent>
     </Card>
   )

@@ -168,6 +168,8 @@ export async function countGovernanceActions(): Promise<number> {
   return Number(res.rows[0]?.count ?? 0)
 }
 
+export { formatGovernanceActionDetailTable, formatGovernanceActionsTable } from './actionFormatting.ts'
+
 /** List actions with documentReferenceTitle resolved from board pack / North My Files. */
 export async function listGovernanceActionsForDisplay(
   query: ListGovernanceActionsQuery = {}

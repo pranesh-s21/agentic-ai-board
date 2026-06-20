@@ -6,13 +6,12 @@ import {
   listGovernanceActionsForDisplay,
   updateGovernanceAction,
 } from './actionsRepository.ts'
+import {
+  formatGovernanceActionDetailTable,
+  formatGovernanceActionsTable,
+} from './actionFormatting.ts'
 import { enrichActionWithDocumentTitle } from './documentReferenceResolver.ts'
 import { GOVERNANCE_ACTION_CREATE_RULES, PROVISIONAL_DUE_DAYS, provisionalDueDate } from './governanceRules.ts'
-import type { GovernanceAction } from './types.ts'
-
-function formatAction(action: GovernanceAction): string {
-  return JSON.stringify(action, null, 2)
-}
 
 export function registerGovernanceMcpTools(server: McpServer): void {
   server.registerTool(
@@ -47,7 +46,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
             text:
               actions.length === 0
                 ? 'No governance actions found.'
-                : actions.map(formatAction).join('\n\n'),
+                : formatGovernanceActionsTable(actions),
           },
         ],
       }
@@ -70,7 +69,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
           isError: true,
         }
       }
-      return { content: [{ type: 'text', text: formatAction(action) }] }
+      return { content: [{ type: 'text', text: formatGovernanceActionDetailTable(action) }] }
     }
   )
 
@@ -140,7 +139,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
           ? `- Due date: ${action.dueDate} (user-specified).`
           : `- Due date: ${action.dueDate} (${PROVISIONAL_DUE_DAYS}-day register placeholder — user did not request this date; mention it is for triage only).`,
         '',
-        formatAction(action),
+        formatGovernanceActionDetailTable(action),
       ].join('\n')
 
       return {
@@ -183,7 +182,7 @@ export function registerGovernanceMcpTools(server: McpServer): void {
       }
       const action = await enrichActionWithDocumentTitle(updated)
       return {
-        content: [{ type: 'text', text: `Updated governance action:\n${formatAction(action)}` }],
+        content: [{ type: 'text', text: `Updated governance action:\n\n${formatGovernanceActionDetailTable(action)}` }],
       }
     }
   )

@@ -15,6 +15,7 @@ import type {
   PrivateWorkspace,
   WorkspaceFolder,
   WorkspaceItem,
+  BoardCommunication,
 } from '@/types'
 
 export const MEETING_ID = 'meeting-1'
@@ -71,6 +72,28 @@ export const calendarMeetings: CalendarMeeting[] = [
     type: 'Committee',
     status: 'Scheduled',
     location: 'Committee Room A',
+    agendaItems: [
+      {
+        id: 'cal-1-a1',
+        title: 'Cyber exposure and control effectiveness',
+        order: 1,
+        status: 'Ready',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 100,
+        documentIds: ['doc-5'],
+      },
+      {
+        id: 'cal-1-a2',
+        title: 'Third-party risk update',
+        order: 2,
+        status: 'Ready',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 90,
+        documentIds: [],
+      },
+    ],
   },
   {
     id: 'cal-2',
@@ -81,6 +104,28 @@ export const calendarMeetings: CalendarMeeting[] = [
     type: 'Preparation',
     status: 'Scheduled',
     location: 'Virtual — Secure Link',
+    agendaItems: [
+      {
+        id: 'cal-2-a1',
+        title: 'Strategic Network Investment — pre-read briefing',
+        order: 1,
+        status: 'In Review',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 85,
+        documentIds: ['doc-1', 'doc-2'],
+      },
+      {
+        id: 'cal-2-a2',
+        title: 'Director questions and clarifications',
+        order: 2,
+        status: 'Draft',
+        decisionRequired: false,
+        aiAvailable: false,
+        preparationProgress: 40,
+        documentIds: [],
+      },
+    ],
   },
   {
     id: MEETING_ID,
@@ -101,6 +146,28 @@ export const calendarMeetings: CalendarMeeting[] = [
     type: 'Committee',
     status: 'Scheduled',
     location: 'Committee Room B',
+    agendaItems: [
+      {
+        id: 'cal-4-a1',
+        title: 'Enterprise risk appetite refresh',
+        order: 1,
+        status: 'Draft',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 55,
+        documentIds: ['doc-3'],
+      },
+      {
+        id: 'cal-4-a2',
+        title: 'Investment programme risk dashboard',
+        order: 2,
+        status: 'Draft',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 30,
+        documentIds: [],
+      },
+    ],
   },
   {
     id: 'cal-5',
@@ -111,8 +178,57 @@ export const calendarMeetings: CalendarMeeting[] = [
     type: 'Board',
     status: 'Scheduled',
     location: 'Virtual — Secure Link',
+    agendaItems: [
+      {
+        id: 'cal-5-a1',
+        title: 'Vendor due diligence status',
+        order: 1,
+        status: 'Draft',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 20,
+        documentIds: [],
+      },
+      {
+        id: 'cal-5-a2',
+        title: 'Quarterly risk reporting — first cycle',
+        order: 2,
+        status: 'Draft',
+        decisionRequired: false,
+        aiAvailable: true,
+        preparationProgress: 15,
+        documentIds: [],
+      },
+    ],
   },
 ]
+
+/** Resolve calendar selection to meeting content for dashboard / meetings views. */
+export function resolveCalendarMeetingDisplay(cal: CalendarMeeting): Meeting {
+  if (cal.id === MEETING_ID) return meeting
+  return {
+    id: cal.id,
+    title: cal.title,
+    date: cal.date,
+    location: cal.location,
+    status: cal.status,
+    agendaItems: cal.agendaItems ?? [],
+  }
+}
+
+export function calendarMeetingHasBoardPack(cal: CalendarMeeting, packPublished = false): boolean {
+  return cal.id === MEETING_ID && packPublished
+}
+
+export const initialBoardCommunication: BoardCommunication = {
+  id: 'comm-1',
+  meetingId: MEETING_ID,
+  title: 'Board Meeting Outcomes — Strategic Investment Review',
+  summary:
+    'The Board approved the Strategic Network Investment Programme subject to: (1) final vendor due diligence before contract award, (2) quarterly risk reporting to the Board, and (3) Audit Committee review of cyber exposure before implementation go-live.',
+  status: 'draft',
+  publishedAt: null,
+}
 
 export const documents: Document[] = [
   { id: 'doc-1', title: 'Main Investment Proposal.pdf', type: 'PDF', pages: 42, agendaItemId: 'agenda-1', versions: ['ver-1a', 'ver-1b'] },
@@ -123,6 +239,49 @@ export const documents: Document[] = [
   { id: 'doc-6', title: 'Vendor Comparison.pptx', type: 'PPTX', pages: 16, agendaItemId: 'agenda-1' },
   { id: 'doc-7', title: 'Prior Board Decisions Extract.pdf', type: 'PDF', pages: 6, agendaItemId: 'agenda-1' },
 ]
+
+/** Organisation document catalog — secretariat attaches these when building a pack. */
+export interface DocumentCatalogEntry {
+  id: string
+  title: string
+  type: string
+  pages: number
+  category: string
+}
+
+export const documentCatalog: DocumentCatalogEntry[] = [
+  { id: 'doc-1', title: 'Main Investment Proposal.pdf', type: 'PDF', pages: 42, category: 'Strategy' },
+  { id: 'doc-2', title: 'Financial Model Summary.xlsx', type: 'XLSX', pages: 12, category: 'Finance' },
+  { id: 'doc-3', title: 'Risk Assessment.pdf', type: 'PDF', pages: 18, category: 'Risk' },
+  { id: 'doc-4', title: 'Legal Note.pdf', type: 'PDF', pages: 8, category: 'Legal' },
+  { id: 'doc-5', title: 'Cybersecurity Assessment.pdf', type: 'PDF', pages: 24, category: 'Cyber' },
+  { id: 'doc-6', title: 'Vendor Comparison.pptx', type: 'PPTX', pages: 16, category: 'Procurement' },
+  { id: 'doc-7', title: 'Prior Board Decisions Extract.pdf', type: 'PDF', pages: 6, category: 'Governance' },
+  { id: 'catalog-8', title: 'ESG Impact Summary.pdf', type: 'PDF', pages: 10, category: 'ESG' },
+  { id: 'catalog-9', title: 'Regulatory Affairs Update.pdf', type: 'PDF', pages: 12, category: 'Legal' },
+  { id: 'catalog-10', title: 'Capital Allocation Model.xlsx', type: 'XLSX', pages: 8, category: 'Finance' },
+]
+
+export function getDemoPackState(): { agendaItems: Meeting['agendaItems']; documents: Document[] } {
+  return {
+    agendaItems: meeting.agendaItems.map((item) => ({ ...item, documentIds: [...item.documentIds] })),
+    documents: documents.map((doc) => ({ ...doc })),
+  }
+}
+
+export function getEmptyPackState(): { agendaItems: Meeting['agendaItems']; documents: Document[] } {
+  return { agendaItems: [], documents: [] }
+}
+
+export function calcAgendaPreparationProgress(
+  documentCount: number,
+  status: Meeting['agendaItems'][0]['status']
+): number {
+  if (status === 'Ready') return 100
+  if (status === 'In Review') return 85
+  if (documentCount === 0) return 0
+  return Math.min(75, 30 + documentCount * 12)
+}
 
 export const initialPrivateWorkspaces: PrivateWorkspace[] = [
   {
@@ -633,6 +792,197 @@ export function findChatResponse(content: string) {
   return null
 }
 
+/** Workbook tabs for Financial Model Summary.xlsx (doc-2) — one sheet per viewer page. */
+export const financialModelSheets: Record<number, DocumentPageContent> = {
+  1: {
+    heading: 'Executive Summary',
+    sheetName: '1. Summary',
+    table: {
+      headers: ['Metric', 'FY2026', 'FY2027', 'FY2028', 'FY2029', 'FY2030'],
+      rows: [
+        ['Total Capex (AED m)', '480', '520', '510', '460', '430'],
+        ['Opex uplift (AED m)', '42', '48', '51', '53', '55'],
+        ['EBITDA impact (AED m)', '(18)', '24', '68', '112', '145'],
+        ['Cumulative FCF (AED m)', '(480)', '(504)', '(486)', '(374)', '(229)'],
+        ['NPV @ 10% (AED m)', '820', '—', '—', '—', '—'],
+        ['IRR', '14.2%', '—', '—', '—', '—'],
+        ['Payback (months)', '60', '—', '—', '—', '—'],
+      ],
+    },
+  },
+  2: {
+    heading: 'Key Assumptions',
+    sheetName: '2. Assumptions',
+    table: {
+      headers: ['Assumption', 'Base case', 'Low case', 'High case'],
+      rows: [
+        ['Demand CAGR', '12%', '10%', '14%'],
+        ['ARPU growth', '2.5%', '1.8%', '3.2%'],
+        ['Regulatory approval', 'Q3 2026', 'Q1 2027', 'Q2 2026'],
+        ['Implementation delay', '0 months', '6 months', '0 months'],
+        ['Discount rate', '10.0%', '10.0%', '10.0%'],
+        ['Inflation (capex)', '3.0%', '3.5%', '2.5%'],
+      ],
+    },
+  },
+  3: {
+    heading: 'Capex Phasing',
+    sheetName: '3. Capex Phasing',
+    table: {
+      headers: ['Phase', 'Year', 'Capex (AED m)', 'Release gate', 'Status'],
+      rows: [
+        ['Phase 1 — Core modernisation', '2026', '480', 'Board approval + regulatory clearance', 'Pending'],
+        ['Phase 2 — Edge expansion', '2027', '520', 'Phase 1 milestones + vendor review', 'Planned'],
+        ['Phase 3 — Resilience layer', '2028', '510', 'Independent assurance sign-off', 'Planned'],
+        ['Phase 4 — Optimisation', '2029', '460', 'Audit Committee cyber review', 'Planned'],
+        ['Phase 5 — Capacity buffer', '2030', '430', 'Traffic growth validation', 'Planned'],
+        ['Total programme', '2026–2030', '2,400', '—', '—'],
+      ],
+    },
+  },
+  4: {
+    heading: 'Sensitivity Analysis',
+    sheetName: '4. Sensitivity',
+    table: {
+      headers: ['Scenario', 'Demand vs base', 'Payback (months)', 'NPV @10% (AED m)', 'Board action'],
+      rows: [
+        ['Base case', '0%', '60', '820', 'Proceed as phased'],
+        ['Moderate downside', '-5%', '69', '710', 'Monitor quarterly'],
+        ['Severe downside', '-10%', '78', '590', 'Board review of phased release'],
+        ['Regulatory delay (+6m)', '0%', '72', '760', 'Condition on clearance'],
+        ['Vendor cost overrun (+8%)', '0%', '66', '740', 'Re-baseline Phase 2'],
+      ],
+    },
+    paragraphs: [
+      'Base case assumes 12% CAGR demand growth and regulatory approval in Q3 2026.',
+      'Capex sensitivity analysis indicates a 10% reduction in demand forecasts would increase payback period by 18 months, requiring Board review of phased release conditions.',
+    ],
+  },
+  5: {
+    heading: 'Revenue Impact',
+    sheetName: '5. Revenue',
+    table: {
+      headers: ['Driver', 'FY2026', 'FY2027', 'FY2028', 'FY2029', 'FY2030'],
+      rows: [
+        ['Data traffic uplift', '4.2%', '6.8%', '8.1%', '9.4%', '10.2%'],
+        ['5G attach rate', '38%', '52%', '61%', '68%', '74%'],
+        ['Incremental revenue (AED m)', '86', '124', '168', '205', '238'],
+        ['Churn reduction benefit (AED m)', '12', '18', '22', '24', '26'],
+        ['Total revenue uplift (AED m)', '98', '142', '190', '229', '264'],
+      ],
+    },
+  },
+  6: {
+    heading: 'Operating Expenditure',
+    sheetName: '6. Opex',
+    table: {
+      headers: ['Category', 'FY2026', 'FY2027', 'FY2028', 'FY2029', 'FY2030'],
+      rows: [
+        ['Maintenance & support', '28', '32', '34', '36', '38'],
+        ['Energy & facilities', '8', '9', '10', '10', '11'],
+        ['Licence & spectrum fees', '4', '4', '5', '5', '5'],
+        ['Staff augmentation', '2', '3', '2', '2', '1'],
+        ['Total opex uplift (AED m)', '42', '48', '51', '53', '55'],
+      ],
+    },
+  },
+  7: {
+    heading: 'NPV Bridge',
+    sheetName: '7. NPV',
+    table: {
+      headers: ['Component', 'AED m', 'Notes'],
+      rows: [
+        ['Gross revenue benefit', '1,240', '5-year cumulative'],
+        ['Operating costs', '(420)', 'Includes support & energy'],
+        ['Capex outlay', '(2,400)', 'Phased 2026–2030'],
+        ['Terminal value', '680', 'Year 5 perpetuity @ 2%'],
+        ['Tax & working capital', '(280)', 'Group tax assumptions'],
+        ['NPV @ 10%', '820', 'Base case'],
+      ],
+    },
+  },
+  8: {
+    heading: 'IRR Analysis',
+    sheetName: '8. IRR',
+    table: {
+      headers: ['Case', 'IRR', 'vs hurdle (12%)', 'Commentary'],
+      rows: [
+        ['Base case', '14.2%', '+2.2 pp', 'Meets investment hurdle'],
+        ['Low demand (-10%)', '11.4%', '-0.6 pp', 'Below hurdle — triggers review'],
+        ['High demand (+10%)', '16.8%', '+4.8 pp', 'Strong upside case'],
+        ['Delayed approval (+6m)', '12.9%', '+0.9 pp', 'Marginally above hurdle'],
+      ],
+    },
+  },
+  9: {
+    heading: 'Scenario A — Phased Release',
+    sheetName: '9. Scenario A',
+    table: {
+      headers: ['Year', 'Capex (AED m)', 'FCF (AED m)', 'Cumulative FCF'],
+      rows: [
+        ['2026', '480', '(498)', '(498)'],
+        ['2027', '520', '(376)', '(874)'],
+        ['2028', '510', '(242)', '(1,116)'],
+        ['2029', '460', '(18)', '(1,134)'],
+        ['2030', '430', '905', '(229)'],
+      ],
+    },
+  },
+  10: {
+    heading: 'Scenario B — Accelerated',
+    sheetName: '10. Scenario B',
+    table: {
+      headers: ['Year', 'Capex (AED m)', 'FCF (AED m)', 'Cumulative FCF'],
+      rows: [
+        ['2026', '620', '(638)', '(638)'],
+        ['2027', '580', '(456)', '(1,094)'],
+        ['2028', '420', '(152)', '(1,246)'],
+        ['2029', '380', '142', '(1,104)'],
+        ['2030', '400', '1,020', '(84)'],
+      ],
+    },
+  },
+  11: {
+    heading: 'Scenario C — Conservative',
+    sheetName: '11. Scenario C',
+    table: {
+      headers: ['Year', 'Capex (AED m)', 'FCF (AED m)', 'Cumulative FCF'],
+      rows: [
+        ['2026', '360', '(378)', '(378)'],
+        ['2027', '400', '(352)', '(730)'],
+        ['2028', '420', '(230)', '(960)'],
+        ['2029', '460', '48', '(912)'],
+        ['2030', '480', '720', '(192)'],
+      ],
+    },
+  },
+  12: {
+    heading: 'Board Conditions Mapping',
+    sheetName: '12. Conditions',
+    table: {
+      headers: ['Condition', 'Trigger', 'Owner', 'Reporting'],
+      rows: [
+        ['Regulatory clearance before Phase 1', 'Pre-spend', 'Legal / Regulatory', 'Board confirmation'],
+        ['Independent vendor risk review', 'Pre-contract award', 'CRO', 'Risk Committee'],
+        ['Quarterly progress & risk reporting', 'Ongoing', 'Programme Director', 'Board pack'],
+        ['Phased capex release gates', 'Each phase start', 'CFO', 'Finance Committee'],
+        ['Audit Committee cyber review', 'Pre go-live', 'CISO', 'Audit Committee'],
+      ],
+    },
+  },
+}
+
+export function getSpreadsheetTabs(documentId: string): { page: number; label: string }[] {
+  if (documentId !== 'doc-2') return []
+
+  return Object.entries(financialModelSheets)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([page, content]) => ({
+      page: Number(page),
+      label: content.sheetName?.replace(/^\d+\.\s*/, '') ?? `Sheet ${page}`,
+    }))
+}
+
 /** Full page bodies for the document viewer — citations highlight passages within this text. */
 export const documentPageContent: Record<string, Record<number, DocumentPageContent>> = {
   'doc-1': {
@@ -667,16 +1017,6 @@ export const documentPageContent: Record<string, Record<number, DocumentPageCont
         '7.1 Overview. The programme relies on a preferred vendor for implementation, ongoing support, and upgrade cycles across the five-year horizon.',
         'The preferred vendor model introduces dependency concentration across implementation, support, and upgrade cycles. Mitigation requires independent vendor risk review before contract award.',
         '7.2 Residual risk rating: High. Concentration is compounded by limited alternative suppliers for specialised network equipment in the proposed architecture.',
-      ],
-    },
-  },
-  'doc-2': {
-    4: {
-      heading: 'Sensitivity Analysis',
-      paragraphs: [
-        'Base case assumes 12% CAGR demand growth and regulatory approval in Q3 2026.',
-        'Capex sensitivity analysis indicates a 10% reduction in demand forecasts would increase payback period by 18 months, requiring Board review of phased release conditions.',
-        'Scenario modelling is provided in tabs 4.1–4.3 of the attached workbook.',
       ],
     },
   },
@@ -725,6 +1065,10 @@ export const documentPageContent: Record<string, Record<number, DocumentPageCont
 export function getDocumentPageContent(documentId: string, page: number): DocumentPageContent {
   const specific = documentPageContent[documentId]?.[page]
   if (specific) return specific
+
+  if (documentId === 'doc-2') {
+    return financialModelSheets[page] ?? financialModelSheets[1]
+  }
 
   const versions = getVersionsForDocument(documentId)
   const latest = versions[versions.length - 1]

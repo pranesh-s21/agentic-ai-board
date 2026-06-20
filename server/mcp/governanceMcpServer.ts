@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { initDatabase } from '../db/migrate.ts'
+import { pingDatabase } from '../db/pool.ts'
 import { registerGovernanceMcpTools } from '../governance/mcpTools.ts'
 
 const PORT = Number(process.env.MCP_PORT ?? 3002)
@@ -37,11 +38,14 @@ const app = createMcpExpressApp({
 })
 
 app.get('/health', (_req, res) => {
-  res.json({
-    ok: true,
-    service: 'board-governance-mcp',
-    endpoint: '/mcp',
-    allowedHosts: allowedHosts ?? 'none (bind-all warning only)',
+  void pingDatabase().then((dbOk) => {
+    res.json({
+      ok: true,
+      service: 'board-governance-mcp',
+      endpoint: '/mcp',
+      database: dbOk ? 'connected' : 'offline',
+      allowedHosts: allowedHosts ?? 'none (bind-all warning only)',
+    })
   })
 })
 
@@ -79,11 +83,12 @@ app.get('/mcp', (_req, res) => {
 
 async function main() {
   const db = await initDatabase()
-  if (!db.ok) {
-    console.error('Governance MCP: database not reachable.')
-    console.error('Start Postgres: docker compose up -d')
-    console.error('Then run: npm run db:migrate')
-    process.exit(1)
+  if (db.ok) {
+    console.log(`Governance MCP: database ready${db.seeded ? ` (seeded ${db.seeded} actions)` : ''}`)
+  } else {
+    console.warn('Governance MCP: database not reachable — governance tools disabled until Postgres is up.')
+    console.warn('Start Postgres: npm run db:up')
+    console.warn('Then run: npm run db:migrate')
   }
 
   app.listen(PORT, () => {

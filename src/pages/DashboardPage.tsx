@@ -1,12 +1,18 @@
+import { useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import { meeting, calendarMeetings, documents, MEETING_ID } from '@/data/mockData'
+import {
+  calendarMeetings,
+  calendarMeetingHasBoardPack,
+  MEETING_ID,
+  resolveCalendarMeetingDisplay,
+} from '@/data/mockData'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { AgentStatusPanel } from '@/components/shared/AgentStatusPanel'
-import { MeetingCalendar } from '@/components/shared/MeetingCalendar'
-import type { ActionItem, AgendaItem } from '@/types'
+import { MeetingCalendar, getMeetingsForDate } from '@/components/shared/MeetingCalendar'
+import type { ActionItem, AgendaItem, CalendarMeeting } from '@/types'
 import {
   Calendar,
   FolderOpen,
@@ -21,6 +27,7 @@ import {
   MapPin,
   Bot,
   AlertTriangle,
+  Lock,
 } from 'lucide-react'
 
 export function DashboardPage() {
@@ -34,15 +41,42 @@ export function DashboardPage() {
     aiEnabledByAgenda,
     canAccess,
     setSelectedActionId,
+    packDocuments,
+    isPackPublished,
+    activeMeeting,
+    boardCommunication,
   } = useApp()
 
-  const meetingActions = actionItems.filter(
-    (a) => a.linkedMeetingId === MEETING_ID || a.linkedDecision.includes('Strategic Network')
-  )
+  const defaultCalMeeting =
+    calendarMeetings.find((m) => m.id === MEETING_ID) ?? calendarMeetings[0]
+  const [selectedCalMeeting, setSelectedCalMeeting] = useState<CalendarMeeting>(defaultCalMeeting)
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(defaultCalMeeting.date)
+
+  const activeMeetingDisplay = resolveCalendarMeetingDisplay(selectedCalMeeting)
+  const hasBoardPack = calendarMeetingHasBoardPack(selectedCalMeeting, isPackPublished)
+  const displayMeeting = selectedCalMeeting.id === MEETING_ID ? activeMeeting : activeMeetingDisplay
+
+  const handleCalendarDateSelect = (dateKey: string) => {
+    setSelectedCalendarDate(dateKey)
+    const dayMeetings = getMeetingsForDate(dateKey)
+    if (dayMeetings.length > 0) {
+      setSelectedCalMeeting(dayMeetings[0])
+    }
+  }
+
+  const handleCalendarMeetingSelect = (cal: CalendarMeeting) => {
+    setSelectedCalMeeting(cal)
+    setSelectedCalendarDate(cal.date)
+  }
+
+  const meetingActions = actionItems.filter((a) => {
+    if (!hasBoardPack) return false
+    return a.linkedMeetingId === MEETING_ID || a.linkedDecision.includes('Strategic Network')
+  })
   const openActions = meetingActions.filter((a) => a.status === 'Open' || a.status === 'Overdue' || a.status === 'Escalated')
   const overdueCount = meetingActions.filter((a) => a.status === 'Overdue').length
   const pendingReviews = reviewItems.filter((r) => r.status === 'Pending Review').length
-  const readyAgenda = meeting.agendaItems.filter((a) => a.status === 'Ready').length
+  const readyAgenda = displayMeeting.agendaItems.filter((a) => a.status === 'Ready').length
 
   const upcomingEvents = [...calendarMeetings]
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -57,18 +91,35 @@ export function DashboardPage() {
           <div className="p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase tracking-widest text-du-magenta-600">Upcoming Board Meeting</p>
-                <h2 className="mt-2 text-2xl font-bold leading-tight text-du-purple-900">{meeting.title}</h2>
+                <p className="text-xs font-bold uppercase tracking-widest text-du-magenta-600">
+                  {selectedCalMeeting.type === 'Board' ? 'Upcoming Board Meeting' : `${selectedCalMeeting.type} Session`}
+                </p>
+                <h2 className="mt-2 text-2xl font-bold leading-tight text-du-purple-900">{displayMeeting.title}</h2>
                 <p className="mt-1 text-sm font-medium text-navy-600">
-                  {formatDate(meeting.date)} · {meeting.location}
+                  {formatDate(displayMeeting.date)} · {displayMeeting.location}
                 </p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <MiniStat icon={Calendar} label="Agenda items" value={String(meeting.agendaItems.length)} />
-                  <MiniStat icon={FolderOpen} label="Pack readiness" value={`${meeting.agendaItems[0]?.preparationProgress ?? 0}%`} />
+                  <MiniStat icon={Calendar} label="Agenda items" value={String(displayMeeting.agendaItems.length)} />
+                  <MiniStat
+                    icon={FolderOpen}
+                    label={role === 'secretariat' ? 'Pack readiness' : 'Pack status'}
+                    value={
+                      role === 'board_member' && !isPackPublished
+                        ? 'Awaiting'
+                        : displayMeeting.agendaItems.length
+                          ? `${Math.round(
+                              displayMeeting.agendaItems.reduce((n, i) => n + i.preparationProgress, 0) /
+                                displayMeeting.agendaItems.length
+                            )}%`
+                          : '—'
+                    }
+                  />
                   <MiniStat icon={MessageSquare} label="AI briefing" value={aiFreeMode ? 'AI-Free' : 'Available'} />
                 </div>
               </div>
-              <Badge variant="pending" className="shrink-0">{meeting.status}</Badge>
+              <Badge variant={isPackPublished ? 'approved' : 'pending'} className="shrink-0">
+                {isPackPublished ? 'Pack published' : 'In preparation'}
+              </Badge>
             </div>
           </div>
         </Card>
@@ -82,8 +133,13 @@ export function DashboardPage() {
               Approve the Strategic Network Investment Programme subject to final vendor due diligence, quarterly risk reporting, and Audit Committee review.
             </p>
             <Badge variant="draft" className="mt-3">Pending Board Decision</Badge>
-            <Button size="sm" className="mt-4 w-full" onClick={() => navigateToBoardPack('agenda-1')}>
-              Open decision pack <ChevronRight className="h-4 w-4" />
+            <Button size="sm" className="mt-4 w-full" onClick={() => role === 'secretariat' ? setScreen('pack_preparation') : navigateToBoardPack(hasBoardPack ? 'agenda-1' : undefined)} disabled={role === 'board_member' && !hasBoardPack}>
+              {role === 'secretariat'
+                ? 'Prepare board pack'
+                : hasBoardPack
+                  ? 'Open decision pack'
+                  : 'Board pack not yet published'}{' '}
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
@@ -93,8 +149,12 @@ export function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Clock} label="Open actions" value={openActions.length} onClick={() => setScreen('action_tracking')} />
         <StatCard icon={AlertTriangle} label="Overdue" value={overdueCount} accent={overdueCount > 0 ? 'danger' : 'default'} onClick={() => setScreen('action_tracking')} />
-        <StatCard icon={ClipboardList} label="Pending reviews" value={pendingReviews} onClick={() => setScreen('secretariat_review')} />
-        <StatCard icon={CheckCircle2} label="Agenda ready" value={readyAgenda} suffix={`/ ${meeting.agendaItems.length}`} />
+        {role === 'secretariat' ? (
+          <StatCard icon={ClipboardList} label="Pending reviews" value={pendingReviews} onClick={() => setScreen('secretariat_review')} />
+        ) : (
+          <StatCard icon={ClipboardList} label="My draft questions" value={1} onClick={() => setScreen('private_workspace')} />
+        )}
+        <StatCard icon={CheckCircle2} label="Agenda ready" value={readyAgenda} suffix={`/ ${displayMeeting.agendaItems.length}`} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-4">
@@ -104,23 +164,31 @@ export function DashboardPage() {
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle>Meeting Agenda</CardTitle>
-                <CardDescription>{meeting.agendaItems.length} items · {formatDate(meeting.date)}</CardDescription>
+                <CardDescription>
+                  {displayMeeting.agendaItems.length} items · {formatDate(displayMeeting.date)}
+                  {selectedCalMeeting.title !== displayMeeting.title ? ` · ${selectedCalMeeting.title}` : ''}
+                </CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={() => setScreen('meetings')}>
                 Full meeting view
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {meeting.agendaItems.map((item) => (
-                <AgendaRow
-                  key={item.id}
-                  item={item}
-                  docCount={documents.filter((d) => item.documentIds.includes(d.id)).length}
-                  aiFreeMode={aiFreeMode && item.id === 'agenda-1'}
-                  aiEnabled={aiEnabledByAgenda[item.id] !== false}
-                  onReview={() => navigateToBoardPack(item.id)}
-                />
-              ))}
+              {displayMeeting.agendaItems.length === 0 ? (
+                <p className="py-6 text-center text-sm text-navy-500">No agenda published for this session yet.</p>
+              ) : (
+                displayMeeting.agendaItems.map((item) => (
+                  <AgendaRow
+                    key={item.id}
+                    item={item}
+                    docCount={packDocuments.filter((d) => item.documentIds.includes(d.id)).length}
+                    aiFreeMode={aiFreeMode && item.id === 'agenda-1'}
+                    aiEnabled={aiEnabledByAgenda[item.id] !== false}
+                    onReview={() => hasBoardPack && navigateToBoardPack(item.id)}
+                    reviewDisabled={!hasBoardPack}
+                  />
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -172,6 +240,19 @@ export function DashboardPage() {
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setScreen('private_workspace')}>
                     Open Private Workspace
                   </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {role === 'board_member' && boardCommunication.status === 'published' && (
+              <Card className="border-du-cyan-200 bg-du-cyan-50/30">
+                <CardHeader>
+                  <CardTitle>Board communication</CardTitle>
+                  <CardDescription>Published by Secretariat</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm font-semibold text-navy-900">{boardCommunication.title}</p>
+                  <p className="text-sm leading-relaxed text-navy-700">{boardCommunication.summary}</p>
                 </CardContent>
               </Card>
             )}
@@ -268,22 +349,41 @@ export function DashboardPage() {
           <Card>
             <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <Button onClick={() => navigateToBoardPack()}><FolderOpen className="h-4 w-4" /> Open Board Pack</Button>
-              <Button variant="outline" onClick={() => setScreen('ask_ai')}><MessageSquare className="h-4 w-4" /> Ask Board AI</Button>
-              <Button variant="outline" onClick={() => setScreen('action_tracking')}><Clock className="h-4 w-4" /> Action Register</Button>
+              {role === 'secretariat' ? (
+                <>
+                  <Button onClick={() => setScreen('pack_preparation')}><FolderOpen className="h-4 w-4" /> Prepare Board Pack</Button>
+                  <Button variant="outline" onClick={() => setScreen('secretariat_review')}><ClipboardList className="h-4 w-4" /> Review Queue</Button>
+                  <Button variant="outline" onClick={() => setScreen('action_tracking')}><Clock className="h-4 w-4" /> Action Register</Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => navigateToBoardPack()} disabled={!isPackPublished}><FolderOpen className="h-4 w-4" /> Open Board Pack</Button>
+                  <Button variant="outline" onClick={() => setScreen('ask_ai')}><MessageSquare className="h-4 w-4" /> Ask Board AI</Button>
+                  <Button variant="outline" onClick={() => setScreen('private_workspace')}><Lock className="h-4 w-4" /> Private Workspace</Button>
+                </>
+              )}
               <Button variant="outline" onClick={() => setScreen('decision_memory')}><Shield className="h-4 w-4" /> Prior Decisions</Button>
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-4">
-          <MeetingCalendar compact />
+          <MeetingCalendar
+            compact
+            selectedDate={selectedCalendarDate}
+            selectedMeetingId={selectedCalMeeting.id}
+            onDateSelect={handleCalendarDateSelect}
+            onSelectMeeting={handleCalendarMeetingSelect}
+          />
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Meeting Readiness</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {meeting.agendaItems.map((item) => (
+              {activeMeeting.agendaItems.length === 0 ? (
+                <p className="text-xs text-navy-500">Select a meeting with a published agenda.</p>
+              ) : (
+                activeMeeting.agendaItems.map((item) => (
                 <div key={item.id}>
                   <div className="flex justify-between text-xs font-semibold text-navy-700">
                     <span className="truncate pr-2">{item.order}. {item.title.split(' ').slice(0, 3).join(' ')}…</span>
@@ -296,7 +396,8 @@ export function DashboardPage() {
                     />
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -311,12 +412,14 @@ function AgendaRow({
   aiFreeMode,
   aiEnabled,
   onReview,
+  reviewDisabled,
 }: {
   item: AgendaItem
   docCount: number
   aiFreeMode: boolean
   aiEnabled: boolean
   onReview: () => void
+  reviewDisabled?: boolean
 }) {
   const statusVariant = item.status === 'Ready' ? 'approved' : item.status === 'Draft' ? 'draft' : 'pending'
 
@@ -349,7 +452,7 @@ function AgendaRow({
           <span className="text-xs font-semibold text-navy-600">{item.preparationProgress}% prepared</span>
         </div>
       </div>
-      <Button variant="outline" size="sm" className="shrink-0" onClick={onReview}>
+      <Button variant="outline" size="sm" className="shrink-0" onClick={onReview} disabled={reviewDisabled}>
         Review <ChevronRight className="h-4 w-4" />
       </Button>
     </div>

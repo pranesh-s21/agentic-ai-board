@@ -1,21 +1,31 @@
 import { useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import { meeting, documents } from '@/data/mockData'
+import { meeting } from '@/data/mockData'
 import { MeetingCalendar, calendarMeetings } from '@/components/shared/MeetingCalendar'
 import type { CalendarMeeting } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { FileText, Bot, Gavel, ChevronRight, Clock, MapPin, Users } from 'lucide-react'
+import { FileText, Bot, Gavel, ChevronRight, Clock, MapPin, Users, ClipboardList, Send, Lock } from 'lucide-react'
 
 export function MeetingsPage() {
-  const { navigateToBoardPack, aiFreeMode, aiEnabledByAgenda } = useApp()
+  const {
+    role,
+    navigateToBoardPack,
+    aiFreeMode,
+    aiEnabledByAgenda,
+    isPackPublished,
+    activeMeeting,
+    packDocuments,
+    setScreen,
+  } = useApp()
   const [selectedCalMeeting, setSelectedCalMeeting] = useState<CalendarMeeting | null>(
     calendarMeetings.find((m) => m.id === meeting.id) ?? null
   )
 
-  const activeMeeting = selectedCalMeeting?.id === meeting.id ? meeting : null
+  const isMainMeeting = selectedCalMeeting?.id === meeting.id
+  const displayMeeting = isMainMeeting ? activeMeeting : null
 
   return (
     <div className="space-y-6">
@@ -24,6 +34,7 @@ export function MeetingsPage() {
           <MeetingCalendar
             onSelectMeeting={(m) => setSelectedCalMeeting(m)}
             selectedDate={selectedCalMeeting?.date}
+            selectedMeetingId={selectedCalMeeting?.id}
           />
         </div>
 
@@ -49,20 +60,40 @@ export function MeetingsPage() {
                       </span>
                     </div>
                   </div>
-                  <Badge variant={selectedCalMeeting.status === 'In Preparation' ? 'pending' : 'approved'}>
-                    {selectedCalMeeting.status}
+                  <Badge variant={isPackPublished ? 'approved' : 'pending'}>
+                    {isPackPublished ? 'Pack published' : 'In preparation'}
                   </Badge>
                 </div>
               </CardHeader>
-              {activeMeeting ? (
-                <CardContent className="pt-5">
-                  <div className="mb-4 flex items-center gap-2 text-sm text-navy-600">
+              {displayMeeting ? (
+                <CardContent className="pt-5 space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-navy-600">
                     <Users className="h-4 w-4" />
-                    {activeMeeting.agendaItems.length} agenda items · Board pack in preparation
+                    {displayMeeting.agendaItems.length} agenda items
                   </div>
-                  <Button onClick={() => navigateToBoardPack()}>
-                    Open Board Pack <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  {role === 'secretariat' ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={() => setScreen('pack_preparation')}>
+                        <ClipboardList className="h-4 w-4" /> Prepare board pack
+                      </Button>
+                      {isPackPublished && (
+                        <Button variant="outline" onClick={() => navigateToBoardPack()}>
+                          Preview published pack <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ) : isPackPublished ? (
+                    <Button onClick={() => navigateToBoardPack()}>
+                      Open board pack <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-lg border border-navy-200 bg-navy-50 px-3 py-2.5">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-navy-500" />
+                      <p className="text-sm text-navy-700">
+                        The board pack is being prepared by Secretariat. You will be notified when materials are published.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               ) : (
                 <CardContent className="pt-5">
@@ -80,17 +111,18 @@ export function MeetingsPage() {
         </div>
       </div>
 
-      {activeMeeting && (
+      {displayMeeting && (
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-navy-900">Agenda</h2>
-            <span className="text-sm text-navy-500">{activeMeeting.agendaItems.length} items</span>
+            <span className="text-sm text-navy-500">{displayMeeting.agendaItems.length} items</span>
           </div>
           <div className="grid gap-4">
-            {activeMeeting.agendaItems.map((item) => {
-              const itemDocs = documents.filter((d) => item.documentIds.includes(d.id))
+            {displayMeeting.agendaItems.map((item) => {
+              const itemDocs = packDocuments.filter((d) => item.documentIds.includes(d.id))
               const aiEnabled = aiEnabledByAgenda[item.id] !== false
               const isStrategic = item.id === 'agenda-1'
+              const canReview = role === 'secretariat' || isPackPublished
 
               return (
                 <Card key={item.id} className="group border-du-purple-100 transition-all hover:border-du-magenta-200 hover:du-card-shadow-lg">
@@ -142,13 +174,20 @@ export function MeetingsPage() {
                           </div>
                         )}
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => navigateToBoardPack(item.id)}
-                        className="shrink-0 group-hover:border-teal-300 group-hover:bg-teal-50"
-                      >
-                        Review <ChevronRight className="h-4 w-4" />
-                      </Button>
+                      {role === 'secretariat' ? (
+                        <Button variant="outline" onClick={() => setScreen('pack_preparation')} className="shrink-0">
+                          <Send className="h-4 w-4" /> Manage
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          onClick={() => navigateToBoardPack(item.id)}
+                          disabled={!canReview}
+                          className="shrink-0 group-hover:border-teal-300 group-hover:bg-teal-50"
+                        >
+                          Review <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -10,6 +10,7 @@ import { PrivateWorkspacePage } from '@/pages/PrivateWorkspacePage'
 import { DecisionMemoryPage } from '@/pages/DecisionMemoryPage'
 import { ActionTrackingPage } from '@/pages/ActionTrackingPage'
 import { SecretariatReviewPage } from '@/pages/SecretariatReviewPage'
+import { PackPreparationPage } from '@/pages/PackPreparationPage'
 import { ChairControlsPage } from '@/pages/ChairControlsPage'
 import { GovernancePage } from '@/pages/GovernancePage'
 import { NorthDocumentViewer } from '@/components/shared/NorthDocumentViewer'
@@ -24,6 +25,7 @@ function ScreenRouter() {
   const pages: Record<Screen, React.ReactNode> = {
     dashboard: <DashboardPage />,
     meetings: <MeetingsPage />,
+    pack_preparation: <PackPreparationPage />,
     board_pack: <BoardPackReviewPage />,
     files: <FilesPage />,
     ask_ai: <AskBoardAIPage />,

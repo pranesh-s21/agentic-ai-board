@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import { meeting, documents, aiInsights, getVersionsForDocument } from '@/data/mockData'
+import { aiInsights, getVersionsForDocument } from '@/data/mockData'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
@@ -17,6 +17,8 @@ import {
   GitCompare,
   MessageSquare,
   Ban,
+  Lock,
+  Eye,
 } from 'lucide-react'
 
 const insightTabs = [
@@ -34,6 +36,7 @@ const CITATION_PAGES: Record<string, number> = {
 
 export function BoardPackReviewPage() {
   const {
+    role,
     selectedAgendaItemId,
     setSelectedAgendaItemId,
     selectedDocumentId,
@@ -44,8 +47,12 @@ export function BoardPackReviewPage() {
     setSelectedCitationId,
     aiFreeMode,
     canAccess,
+    isPackPublished,
+    activeMeeting,
+    packDocuments,
     addPrivateNote,
-    showToast,
+    submitToSecretariat,
+    setScreen,
     setShowComparisonModal,
     navigateToCitation,
   } = useApp()
@@ -55,11 +62,40 @@ export function BoardPackReviewPage() {
   const [zoom, setZoom] = useState(100)
   const [versionCompareOpen, setVersionCompareOpen] = useState(false)
 
-  const agendaItem = meeting.agendaItems.find((a) => a.id === selectedAgendaItemId) ?? meeting.agendaItems[0]
-  const agendaDocs = documents.filter((d) => agendaItem.documentIds.includes(d.id))
-  const currentDoc = documents.find((d) => d.id === selectedDocumentId) ?? agendaDocs[0]
+  const agendaItem = activeMeeting.agendaItems.find((a) => a.id === selectedAgendaItemId) ?? activeMeeting.agendaItems[0]
+  const agendaDocs = packDocuments.filter((d) => agendaItem?.documentIds.includes(d.id))
+  const currentDoc = packDocuments.find((d) => d.id === selectedDocumentId) ?? agendaDocs[0]
   const hasVersions = currentDoc ? getVersionsForDocument(currentDoc.id).length >= 2 : false
   const isAiFreeForItem = aiFreeMode && selectedAgendaItemId === 'agenda-1'
+  const isSecretariatPreview = role === 'secretariat' && !isPackPublished
+
+  if (role === 'board_member' && !isPackPublished) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-navy-200 bg-white py-24 text-center">
+        <Lock className="mb-4 h-12 w-12 text-navy-300" />
+        <h2 className="text-lg font-bold text-du-purple-900">Board pack not yet published</h2>
+        <p className="mt-2 max-w-md text-sm text-navy-600">
+          Secretariat is preparing materials for this meeting. You will be able to review the official pack once it is published to the board.
+        </p>
+        <Button variant="outline" className="mt-6" onClick={() => setScreen('dashboard')}>
+          Return to dashboard
+        </Button>
+      </div>
+    )
+  }
+
+  if (!agendaItem) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-navy-200 bg-white py-24 text-center">
+        <p className="text-sm text-navy-600">No agenda items in this pack yet.</p>
+        {role === 'secretariat' && (
+          <Button className="mt-4" onClick={() => setScreen('pack_preparation')}>
+            Prepare board pack
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   const openFollowUp = () => {
     if (!isAiFreeForItem) setChatOpen(true)
@@ -108,10 +144,11 @@ export function BoardPackReviewPage() {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-du-magenta-600">Board Pack Review</p>
           <h2 className="text-lg font-bold text-du-purple-900">{agendaItem.title}</h2>
-          <p className="text-xs font-medium text-navy-600">{meeting.title} · {formatDate(meeting.date)}</p>
+          <p className="text-xs font-medium text-navy-600">{activeMeeting.title} · {formatDate(activeMeeting.date)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="official">Official Record</Badge>
+          {isSecretariatPreview && <Badge variant="pending"><Eye className="mr-1 h-3 w-3" /> Secretariat preview</Badge>}
           {agendaItem.decisionRequired && <Badge variant="draft">Decision Required</Badge>}
           {isAiFreeForItem && <Badge variant="restricted">AI-Free Mode</Badge>}
         </div>
@@ -132,13 +169,13 @@ export function BoardPackReviewPage() {
             <p className="text-[11px] font-bold uppercase tracking-wider text-navy-600">Agenda</p>
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin">
-            {meeting.agendaItems.map((item) => (
+            {activeMeeting.agendaItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => {
                   setSelectedAgendaItemId(item.id)
-                  const firstDoc = documents.find((d) => item.documentIds.includes(d.id))
+                  const firstDoc = packDocuments.find((d) => item.documentIds.includes(d.id))
                   if (firstDoc) selectDocument(firstDoc.id)
                 }}
                 className={`block w-full border-b border-navy-100 px-4 py-3 text-left transition-colors hover:bg-du-purple-50 ${
@@ -228,7 +265,16 @@ export function BoardPackReviewPage() {
               <Bookmark className="h-4 w-4" /> Save to private notes
             </Button>
             {canAccess('send_to_secretariat') && (
-              <Button variant="outline" size="sm" className="w-full bg-white" onClick={() => showToast('Sent to Secretariat for review')}>
+              <Button variant="outline" size="sm" className="w-full bg-white" onClick={() => {
+                const insight = aiInsights.find((i) => i.type === activeTab as typeof aiInsights[0]['type']) ?? aiInsights[0]
+                const content = typeof insight.content === 'string' ? insight.content : insight.content.join('\n')
+                submitToSecretariat({
+                  title: `Director question — ${agendaItem.title}`,
+                  content,
+                  type: 'question',
+                  citationIds: insight.citationIds,
+                })
+              }}>
                 <Send className="h-4 w-4" /> Send to Secretariat
               </Button>
             )}

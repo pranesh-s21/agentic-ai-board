@@ -45,6 +45,9 @@ export function SecretariatReviewPage() {
                   <CardTitle className="text-base">{item.title}</CardTitle>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge variant="ai">AI-Assisted Draft</Badge>
+                    {item.source === 'director' && (
+                      <Badge variant="official">From director</Badge>
+                    )}
                     <Badge variant={item.status === 'Approved' ? 'approved' : item.status === 'Rejected' ? 'danger' : 'pending'}>
                       {item.status}
                     </Badge>
